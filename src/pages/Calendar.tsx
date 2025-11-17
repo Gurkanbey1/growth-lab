@@ -123,6 +123,10 @@ const Calendar = () => {
         return 'secondary';
       case 'expense':
         return 'destructive';
+      case 'note':
+        return 'outline';
+      default:
+        return 'default';
     }
   };
 
