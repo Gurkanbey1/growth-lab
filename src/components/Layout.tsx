@@ -51,7 +51,11 @@ const Sidebar = ({ className }: { className?: string }) => {
   return (
     <div className={cn('flex flex-col h-full bg-sidebar text-sidebar-foreground', className)}>
       <div className="p-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold text-primary">Wind Medya CRM</h1>
+        <img 
+          src="https://www.windmedya.com/assets/img/logo/logo.png" 
+          alt="Wind Medya" 
+          className="h-10 w-auto object-contain"
+        />
       </div>
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
