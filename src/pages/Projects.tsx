@@ -423,78 +423,99 @@ const Projects = () => {
           </Dialog>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Projeler ({projects?.length || 0})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : projects?.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">Henüz proje bulunmuyor.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Proje Adı</TableHead>
-                    <TableHead>Firma</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead>Bütçe</TableHead>
-                    <TableHead>Ödenen</TableHead>
-                    <TableHead>Kalan</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {projects?.map((project) => {
-                    const remaining = (project.budget || 0) - (project.paid_amount || 0);
-                    return (
-                      <TableRow key={project.id}>
-                        <TableCell className="font-medium">{project.name}</TableCell>
-                        <TableCell>{project.companies?.name}</TableCell>
-                        <TableCell>{getStatusBadge(project.status)}</TableCell>
-                        <TableCell>{Number(project.budget).toLocaleString('tr-TR')} TL</TableCell>
-                        <TableCell>{Number(project.paid_amount || 0).toLocaleString('tr-TR')} TL</TableCell>
-                        <TableCell>
-                          <span className={remaining > 0 ? 'text-red-500 font-semibold' : 'text-green-500'}>
-                            {remaining.toLocaleString('tr-TR')} TL
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {remaining > 0 && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOpenPayment(project)}
-                              >
-                                <DollarSign className="h-4 w-4 mr-1" />
-                                Ödeme Ekle
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(project)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteMutation.mutate(project.id)}
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : !projects || projects.length === 0 ? (
+            <Card>
+              <CardContent className="py-8">
+                <p className="text-center text-muted-foreground">Henüz proje bulunmuyor.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            (() => {
+              // Projeleri firmaya göre grupla
+              const projectsByCompany = projects.reduce((acc, project) => {
+                const companyName = project.companies?.name || 'Firma Belirtilmemiş';
+                if (!acc[companyName]) {
+                  acc[companyName] = [];
+                }
+                acc[companyName].push(project);
+                return acc;
+              }, {} as Record<string, typeof projects>);
+
+              return Object.entries(projectsByCompany).map(([companyName, companyProjects]) => (
+                <Card key={companyName}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>{companyName}</span>
+                      <Badge variant="outline">{companyProjects.length} Proje</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Proje Adı</TableHead>
+                          <TableHead>Durum</TableHead>
+                          <TableHead>Bütçe</TableHead>
+                          <TableHead>Ödenen</TableHead>
+                          <TableHead>Kalan</TableHead>
+                          <TableHead className="text-right">İşlemler</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {companyProjects.map((project) => {
+                          const remaining = (project.budget || 0) - (project.paid_amount || 0);
+                          return (
+                            <TableRow key={project.id}>
+                              <TableCell className="font-medium">{project.name}</TableCell>
+                              <TableCell>{getStatusBadge(project.status)}</TableCell>
+                              <TableCell>{Number(project.budget).toLocaleString('tr-TR')} ₺</TableCell>
+                              <TableCell>{Number(project.paid_amount || 0).toLocaleString('tr-TR')} ₺</TableCell>
+                              <TableCell>
+                                <span className={remaining > 0 ? 'text-red-500 font-semibold' : 'text-green-500'}>
+                                  {remaining.toLocaleString('tr-TR')} ₺
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  {remaining > 0 && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleOpenPayment(project)}
+                                    >
+                                      <DollarSign className="h-4 w-4 mr-1" />
+                                      Ödeme Ekle
+                                    </Button>
+                                  )}
+                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(project)}>
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => deleteMutation.mutate(project.id)}
+                                    disabled={deleteMutation.isPending}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              ));
+            })()
+          )}
+        </div>
 
         {/* Payment Dialog */}
         <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
