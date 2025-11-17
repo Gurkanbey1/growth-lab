@@ -23,7 +23,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Loader2, DollarSign, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 type ExpenseFrequency = 'once' | 'monthly' | 'quarterly' | 'biannual' | 'yearly';
