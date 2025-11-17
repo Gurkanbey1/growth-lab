@@ -252,7 +252,7 @@ const Projects = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="budget">Bütçe (₺)</Label>
+                    <Label htmlFor="budget">Bütçe (TL)</Label>
                     <Input
                       id="budget"
                       type="number"
@@ -263,7 +263,7 @@ const Projects = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="paid_amount">Ödenen (₺)</Label>
+                    <Label htmlFor="paid_amount">Ödenen (TL)</Label>
                     <Input
                       id="paid_amount"
                       type="number"
@@ -343,9 +343,9 @@ const Projects = () => {
                       <TableCell className="font-medium">{project.name}</TableCell>
                       <TableCell>{project.companies?.name}</TableCell>
                       <TableCell>{getStatusBadge(project.status)}</TableCell>
-                      <TableCell>₺{project.budget.toLocaleString('tr-TR')}</TableCell>
-                      <TableCell>₺{project.paid_amount.toLocaleString('tr-TR')}</TableCell>
-                      <TableCell className="font-medium">₺{((project.remaining_amount || 0)).toLocaleString('tr-TR')}</TableCell>
+                      <TableCell>{project.budget.toLocaleString('tr-TR')} TL</TableCell>
+                      <TableCell>{project.paid_amount.toLocaleString('tr-TR')} TL</TableCell>
+                      <TableCell className="font-medium">{((project.remaining_amount || 0)).toLocaleString('tr-TR')} TL</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(project)}>
                           <Pencil className="h-4 w-4" />
