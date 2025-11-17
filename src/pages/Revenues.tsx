@@ -207,7 +207,7 @@ const Revenues = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="amount">Tutar (₺) *</Label>
+                    <Label htmlFor="amount">Tutar (TL) *</Label>
                     <Input
                       id="amount"
                       type="number"
@@ -264,7 +264,7 @@ const Revenues = () => {
             <CardTitle>Toplam Gelir</CardTitle>
             <div className="flex items-center gap-2 text-2xl font-bold text-primary">
               <TrendingUp className="h-6 w-6" />
-              ₺{totalRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+              {totalRevenue.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL
             </div>
           </CardHeader>
         </Card>
@@ -301,7 +301,7 @@ const Revenues = () => {
                       <TableCell>{revenue.companies?.name || '-'}</TableCell>
                       <TableCell>{revenue.projects?.name || '-'}</TableCell>
                       <TableCell>{revenue.invoice_number || '-'}</TableCell>
-                      <TableCell className="font-medium text-primary">₺{Number(revenue.amount).toLocaleString('tr-TR')}</TableCell>
+                      <TableCell className="font-medium text-primary">{Number(revenue.amount).toLocaleString('tr-TR')} TL</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(revenue)}>
                           <Pencil className="h-4 w-4" />

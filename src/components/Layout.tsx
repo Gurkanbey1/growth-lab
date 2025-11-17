@@ -13,6 +13,7 @@ import {
   Users,
   LogOut,
   Menu,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Gelirler', href: '/revenues', icon: TrendingUp },
   { name: 'Giderler', href: '/expenses', icon: DollarSign },
   { name: 'Takvim', href: '/calendar', icon: Calendar },
+  { name: 'Ayarlar', href: '/settings', icon: Settings },
 ];
 
 const adminNavigation = [

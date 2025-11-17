@@ -243,7 +243,7 @@ const SocialMedia = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="monthly_fee">Aylık Ücret (₺)</Label>
+                    <Label htmlFor="monthly_fee">Aylık Ücret (TL)</Label>
                     <Input
                       id="monthly_fee"
                       type="number"
@@ -316,7 +316,7 @@ const SocialMedia = () => {
                         <TableCell className="font-medium">{account.platform}</TableCell>
                         <TableCell>{account.account_name}</TableCell>
                         <TableCell>{account.companies?.name}</TableCell>
-                        <TableCell>₺{account.monthly_fee?.toLocaleString('tr-TR') || '-'}</TableCell>
+                        <TableCell>{account.monthly_fee?.toLocaleString('tr-TR') || '-'} {account.monthly_fee ? 'TL' : ''}</TableCell>
                         <TableCell>{new Date(account.renewal_date).toLocaleDateString('tr-TR')}</TableCell>
                         <TableCell>
                           <span className={daysLeft < 7 ? 'text-destructive font-medium' : ''}>

@@ -222,7 +222,7 @@ const Expenses = () => {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="amount">Tutar (₺) *</Label>
+                    <Label htmlFor="amount">Tutar (TL) *</Label>
                     <Input
                       id="amount"
                       type="number"
@@ -322,7 +322,7 @@ const Expenses = () => {
               <CardTitle>Toplam Gider</CardTitle>
               <div className="flex items-center gap-2 text-2xl font-bold text-destructive">
                 <DollarSign className="h-6 w-6" />
-                ₺{totalExpenses.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
+                {totalExpenses.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL
               </div>
             </CardHeader>
           </Card>
@@ -372,7 +372,7 @@ const Expenses = () => {
                       <TableCell>
                         {expense.next_payment_date ? new Date(expense.next_payment_date).toLocaleDateString('tr-TR') : '-'}
                       </TableCell>
-                      <TableCell className="font-medium text-destructive">₺{Number(expense.amount).toLocaleString('tr-TR')}</TableCell>
+                      <TableCell className="font-medium text-destructive">{Number(expense.amount).toLocaleString('tr-TR')} TL</TableCell>
                       <TableCell className="text-right space-x-2">
                         {expense.frequency !== 'once' && expense.next_payment_date && (
                           <Button

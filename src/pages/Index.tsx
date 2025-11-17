@@ -65,7 +65,7 @@ const Index = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">₺0</div>
+              <div className="text-2xl font-bold">0 TL</div>
               <p className="text-xs text-muted-foreground">
                 Bu ay
               </p>
