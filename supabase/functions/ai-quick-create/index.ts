@@ -7,6 +7,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Helper function to calculate string similarity
+function calculateSimilarity(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const maxLen = Math.max(len1, len2);
+  
+  if (maxLen === 0) return 1.0;
+  
+  let matches = 0;
+  const minLen = Math.min(len1, len2);
+  
+  for (let i = 0; i < minLen; i++) {
+    if (str1[i] === str2[i]) matches++;
+  }
+  
+  return matches / maxLen;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -151,15 +169,37 @@ Firma tipi belirtilmemişse "customer" kullan. Proje durumu belirtilmemişse "ac
     const entities = JSON.parse(toolCall.function.arguments);
     console.log("Parsed entities:", entities);
 
-    // Check if company already exists
-    const { data: existingCompany } = await supabase
-      .from("companies")
-      .select("id, name")
-      .ilike("name", entities.company.name)
-      .single();
+    // Helper function to normalize company name for comparison
+    const normalizeName = (name: string) => {
+      return name.toLowerCase()
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/[^a-z0-9]/g, '');
+    };
 
-    if (existingCompany) {
-      throw new Error(`"${existingCompany.name}" isimli firma zaten mevcut`);
+    // Check if company already exists (exact match, case-insensitive)
+    const { data: existingCompanies } = await supabase
+      .from("companies")
+      .select("id, name");
+
+    if (existingCompanies && existingCompanies.length > 0) {
+      const inputNormalized = normalizeName(entities.company.name);
+      
+      // Check for exact or similar names
+      for (const existing of existingCompanies) {
+        const existingNormalized = normalizeName(existing.name);
+        
+        // Exact match
+        if (existingNormalized === inputNormalized) {
+          throw new Error(`"${existing.name}" isimli firma zaten mevcut`);
+        }
+        
+        // Similar match (70% similarity)
+        const similarity = calculateSimilarity(inputNormalized, existingNormalized);
+        if (similarity > 0.7) {
+          throw new Error(`"${existing.name}" ismine çok benzer bir firma zaten mevcut`);
+        }
+      }
     }
 
     // Create company
@@ -180,6 +220,7 @@ Firma tipi belirtilmemişse "customer" kullan. Proje durumu belirtilmemişse "ac
       throw companyError;
     }
 
+    // Create project
     // Create project
     const { data: project, error: projectError } = await supabase
       .from("projects")
