@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -47,6 +47,7 @@ interface Project {
 const Projects = () => {
   const [open, setOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [projectStatuses, setProjectStatuses] = useState<string[]>(['active', 'pending', 'completed', 'cancelled']);
   const [formData, setFormData] = useState<Partial<Project>>({
     company_id: '',
     name: '',
@@ -60,6 +61,13 @@ const Projects = () => {
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const savedStatuses = localStorage.getItem('projeDurumlari');
+    if (savedStatuses) {
+      setProjectStatuses(JSON.parse(savedStatuses));
+    }
+  }, []);
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -171,14 +179,14 @@ const Projects = () => {
   };
 
   const getStatusBadge = (status: ProjectStatus) => {
-    const config = {
-      active: { label: 'Aktif', variant: 'default' as const },
-      completed: { label: 'Tamamlandı', variant: 'secondary' as const },
-      cancelled: { label: 'İptal', variant: 'destructive' as const },
-      pending: { label: 'Beklemede', variant: 'outline' as const },
+    const config: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
+      active: { label: 'Aktif', variant: 'default' },
+      completed: { label: 'Tamamlandı', variant: 'secondary' },
+      cancelled: { label: 'İptal', variant: 'destructive' },
+      pending: { label: 'Beklemede', variant: 'outline' },
     };
-    const { label, variant } = config[status];
-    return <Badge variant={variant}>{label}</Badge>;
+    const statusConfig = config[status] || { label: status, variant: 'outline' as const };
+    return <Badge variant={statusConfig.variant}>{statusConfig.label}</Badge>;
   };
 
   return (
@@ -231,10 +239,14 @@ const Projects = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active">Aktif</SelectItem>
-                        <SelectItem value="pending">Beklemede</SelectItem>
-                        <SelectItem value="completed">Tamamlandı</SelectItem>
-                        <SelectItem value="cancelled">İptal</SelectItem>
+                        {projectStatuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status === 'active' ? 'Aktif' : 
+                             status === 'pending' ? 'Beklemede' : 
+                             status === 'completed' ? 'Tamamlandı' : 
+                             status === 'cancelled' ? 'İptal' : status}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
