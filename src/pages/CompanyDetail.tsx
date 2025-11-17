@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, DollarSign, Plus, TrendingUp, TrendingDown, Download, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, DollarSign, Plus, TrendingUp, TrendingDown, Download, FileSpreadsheet, Pencil, Trash2, Save, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,8 @@ const CompanyDetail = () => {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [editingPayment, setEditingPayment] = useState<any>(null);
+  const [paymentNote, setPaymentNote] = useState('');
 
   const { data: company, isLoading } = useQuery({
     queryKey: ['company', id],
@@ -124,14 +126,14 @@ const CompanyDetail = () => {
   const totalExpense = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
 
   const addPaymentMutation = useMutation({
-    mutationFn: async ({ projectId, amount }: { projectId: string; amount: number }) => {
+    mutationFn: async ({ projectId, amount, notes }: { projectId: string; amount: number; notes?: string }) => {
       const project = projects?.find(p => p.id === projectId);
       if (!project) throw new Error('Proje bulunamadı');
 
       const newPaidAmount = (project.paid_amount || 0) + amount;
       const newRemainingAmount = (project.budget || 0) - newPaidAmount;
 
-      const { error } = await supabase
+      const { error: projectError } = await supabase
         .from('projects')
         .update({
           paid_amount: newPaidAmount,
@@ -139,14 +141,96 @@ const CompanyDetail = () => {
         })
         .eq('id', projectId);
 
-      if (error) throw error;
+      if (projectError) throw projectError;
+
+      const { data: user } = await supabase.auth.getUser();
+      const { error: paymentError } = await supabase
+        .from('project_payments')
+        .insert({
+          project_id: projectId,
+          amount,
+          notes,
+          created_by: user.user?.id,
+        });
+
+      if (paymentError) throw paymentError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['company-payment-history', id] });
       toast({ title: 'Ödeme başarıyla eklendi' });
       setPaymentOpen(false);
       setPaymentAmount('');
+      setPaymentNote('');
       setSelectedProject(null);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Hata', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const updatePaymentMutation = useMutation({
+    mutationFn: async ({ paymentId, notes }: { paymentId: string; notes: string }) => {
+      const { error } = await supabase
+        .from('project_payments')
+        .update({ notes })
+        .eq('id', paymentId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-payment-history', id] });
+      toast({ title: 'Ödeme güncellendi' });
+      setEditingPayment(null);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Hata', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const deletePaymentMutation = useMutation({
+    mutationFn: async (paymentId: string) => {
+      const { data: payment } = await supabase
+        .from('project_payments')
+        .select('*, projects(*)')
+        .eq('id', paymentId)
+        .single();
+
+      if (!payment) throw new Error('Ödeme bulunamadı');
+
+      const project = payment.projects;
+      const newPaidAmount = (project.paid_amount || 0) - payment.amount;
+      const newRemainingAmount = (project.budget || 0) - newPaidAmount;
+
+      const { error: projectError } = await supabase
+        .from('projects')
+        .update({
+          paid_amount: newPaidAmount,
+          remaining_amount: newRemainingAmount,
+        })
+        .eq('id', payment.project_id);
+
+      if (projectError) throw projectError;
+
+      const { error: deleteError } = await supabase
+        .from('project_payments')
+        .delete()
+        .eq('id', paymentId);
+
+      if (deleteError) throw deleteError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['company-payment-history', id] });
+      toast({ title: 'Ödeme silindi' });
     },
     onError: (error: any) => {
       toast({ 
@@ -165,6 +249,7 @@ const CompanyDetail = () => {
   const handleClosePayment = () => {
     setPaymentOpen(false);
     setPaymentAmount('');
+    setPaymentNote('');
     setSelectedProject(null);
   };
 
@@ -189,7 +274,11 @@ const CompanyDetail = () => {
       return;
     }
 
-    addPaymentMutation.mutate({ projectId: selectedProject.id, amount });
+    addPaymentMutation.mutate({ 
+      projectId: selectedProject.id, 
+      amount,
+      notes: paymentNote || undefined,
+    });
   };
 
   // Prepare chart data for revenue/expense
@@ -520,26 +609,90 @@ const CompanyDetail = () => {
                   <p className="text-center text-muted-foreground py-8">Henüz ödeme bulunmuyor.</p>
                 ) : (
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Proje</TableHead>
-                        <TableHead>Tutar</TableHead>
-                        <TableHead>Ödeme Tarihi</TableHead>
-                        <TableHead>Notlar</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paymentHistory.map((payment: any) => (
-                        <TableRow key={payment.id}>
-                          <TableCell className="font-medium">{payment.projects?.name}</TableCell>
-                          <TableCell className="text-green-600 font-semibold">
-                            {payment.amount.toLocaleString('tr-TR')} TL
-                          </TableCell>
-                          <TableCell>{new Date(payment.payment_date).toLocaleDateString('tr-TR')}</TableCell>
-                          <TableCell>{payment.notes || '-'}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
+                     <TableHeader>
+                       <TableRow>
+                         <TableHead>Proje</TableHead>
+                         <TableHead>Tutar</TableHead>
+                         <TableHead>Ödeme Tarihi</TableHead>
+                         <TableHead>Notlar</TableHead>
+                         <TableHead className="text-right">İşlemler</TableHead>
+                       </TableRow>
+                     </TableHeader>
+                     <TableBody>
+                       {paymentHistory.map((payment: any) => (
+                         <TableRow key={payment.id}>
+                           <TableCell className="font-medium">{payment.projects?.name}</TableCell>
+                           <TableCell className="text-green-600 font-semibold">
+                             {payment.amount.toLocaleString('tr-TR')} TL
+                           </TableCell>
+                           <TableCell>{new Date(payment.payment_date).toLocaleDateString('tr-TR')}</TableCell>
+                           <TableCell>
+                             {editingPayment?.id === payment.id ? (
+                               <Input
+                                 value={editingPayment.notes || ''}
+                                 onChange={(e) =>
+                                   setEditingPayment({ ...editingPayment, notes: e.target.value })
+                                 }
+                                 placeholder="Not ekleyin"
+                                 className="max-w-xs"
+                               />
+                             ) : (
+                               <span className="text-muted-foreground">
+                                 {payment.notes || '-'}
+                               </span>
+                             )}
+                           </TableCell>
+                           <TableCell className="text-right">
+                             <div className="flex justify-end gap-2">
+                               {editingPayment?.id === payment.id ? (
+                                 <>
+                                   <Button
+                                     size="sm"
+                                     variant="ghost"
+                                     onClick={() => {
+                                       updatePaymentMutation.mutate({
+                                         paymentId: payment.id,
+                                         notes: editingPayment.notes || '',
+                                       });
+                                     }}
+                                   >
+                                     <Save className="h-4 w-4" />
+                                   </Button>
+                                   <Button
+                                     size="sm"
+                                     variant="ghost"
+                                     onClick={() => setEditingPayment(null)}
+                                   >
+                                     <X className="h-4 w-4" />
+                                   </Button>
+                                 </>
+                               ) : (
+                                 <>
+                                   <Button
+                                     size="sm"
+                                     variant="ghost"
+                                     onClick={() => setEditingPayment(payment)}
+                                   >
+                                     <Pencil className="h-4 w-4" />
+                                   </Button>
+                                   <Button
+                                     size="sm"
+                                     variant="ghost"
+                                     onClick={() => {
+                                       if (confirm('Bu ödemeyi silmek istediğinizden emin misiniz?')) {
+                                         deletePaymentMutation.mutate(payment.id);
+                                       }
+                                     }}
+                                   >
+                                     <Trash2 className="h-4 w-4" />
+                                   </Button>
+                                 </>
+                               )}
+                             </div>
+                           </TableCell>
+                         </TableRow>
+                       ))}
+                     </TableBody>
                   </Table>
                 )}
               </CardContent>
@@ -750,6 +903,15 @@ const CompanyDetail = () => {
                     min="0"
                     max={selectedProject.remaining_amount || 0}
                     step="0.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="payment-note">Not (Opsiyonel)</Label>
+                  <Input
+                    id="payment-note"
+                    value={paymentNote}
+                    onChange={(e) => setPaymentNote(e.target.value)}
+                    placeholder="Ödeme notu ekleyin"
                   />
                 </div>
               </div>

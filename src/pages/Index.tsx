@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, FolderKanban, Share2, TrendingUp, DollarSign, Loader2, AlertCircle, Globe } from 'lucide-react';
+import { Building2, FolderKanban, Share2, TrendingUp, DollarSign, Loader2, AlertCircle, Globe, Calendar, TrendingDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const Index = () => {
   const { data: companies } = useQuery({
@@ -98,6 +99,97 @@ const Index = () => {
     },
   });
 
+  const { data: upcomingDomains } = useQuery({
+    queryKey: ['upcomingDomains'],
+    queryFn: async () => {
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      
+      const { data, error } = await supabase
+        .from('domains')
+        .select('*')
+        .lte('expire_date', thirtyDaysFromNow.toISOString().split('T')[0])
+        .gte('expire_date', new Date().toISOString().split('T')[0])
+        .order('expire_date', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: monthlyData } = useQuery({
+    queryKey: ['monthlyTrend'],
+    queryFn: async () => {
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+      const { data: revenues, error: revError } = await supabase
+        .from('revenues')
+        .select('amount, revenue_date')
+        .gte('revenue_date', sixMonthsAgo.toISOString().split('T')[0]);
+
+      const { data: expenses, error: expError } = await supabase
+        .from('expenses')
+        .select('amount, next_payment_date')
+        .gte('next_payment_date', sixMonthsAgo.toISOString().split('T')[0]);
+
+      if (revError || expError) throw revError || expError;
+
+      const monthlyMap = new Map();
+      
+      revenues?.forEach((rev: any) => {
+        const month = new Date(rev.revenue_date).toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' });
+        if (!monthlyMap.has(month)) {
+          monthlyMap.set(month, { month, gelir: 0, gider: 0 });
+        }
+        monthlyMap.get(month).gelir += Number(rev.amount);
+      });
+
+      expenses?.forEach((exp: any) => {
+        if (!exp.next_payment_date) return;
+        const month = new Date(exp.next_payment_date).toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' });
+        if (!monthlyMap.has(month)) {
+          monthlyMap.set(month, { month, gelir: 0, gider: 0 });
+        }
+        monthlyMap.get(month).gider += Number(exp.amount);
+      });
+
+      return Array.from(monthlyMap.values()).sort((a, b) => {
+        const dateA = new Date(a.month);
+        const dateB = new Date(b.month);
+        return dateA.getTime() - dateB.getTime();
+      });
+    },
+  });
+
+  const { data: projectStatusData } = useQuery({
+    queryKey: ['projectStatus'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('status');
+
+      if (error) throw error;
+
+      const statusCount = data.reduce((acc: any, project: any) => {
+        acc[project.status] = (acc[project.status] || 0) + 1;
+        return acc;
+      }, {});
+
+      const statusLabels: Record<string, string> = {
+        active: 'Aktif',
+        completed: 'Tamamlandı',
+        cancelled: 'İptal',
+        pending: 'Beklemede',
+      };
+
+      return Object.entries(statusCount).map(([status, count]) => ({
+        name: statusLabels[status] || status,
+        value: count,
+      }));
+    },
+  });
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -116,8 +208,8 @@ const Index = () => {
               {debtLoading ? (
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               ) : (
-                <div className={`text-2xl font-bold ${(totalDebt || 0) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                  {(totalDebt || 0).toLocaleString('tr-TR')} TL
+                <div className="text-2xl font-bold">
+                  {(totalDebt || 0).toLocaleString('tr-TR')} ₺
                 </div>
               )}
             </CardContent>
@@ -126,14 +218,14 @@ const Index = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Toplam Gelir</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               {revenueLoading ? (
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               ) : (
-                <div className="text-2xl font-bold text-green-500">
-                  {(totalRevenue || 0).toLocaleString('tr-TR')} TL
+                <div className="text-2xl font-bold">
+                  {(totalRevenue || 0).toLocaleString('tr-TR')} ₺
                 </div>
               )}
             </CardContent>
@@ -142,14 +234,14 @@ const Index = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Toplam Gider</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               {expenseLoading ? (
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               ) : (
-                <div className="text-2xl font-bold text-orange-500">
-                  {(totalExpense || 0).toLocaleString('tr-TR')} TL
+                <div className="text-2xl font-bold">
+                  {(totalExpense || 0).toLocaleString('tr-TR')} ₺
                 </div>
               )}
             </CardContent>
@@ -157,46 +249,84 @@ const Index = () => {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Toplam Firma
-              </CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Yaklaşan Domain Yenilemeleri</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{companies ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Müşteri, freelancer ve tedarikçi
-              </p>
+              <div className="text-2xl font-bold">
+                {upcomingDomains?.length || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">30 gün içinde</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Son 6 Ay Gelir/Gider Trendi</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={monthlyData || []}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip 
+                    formatter={(value: number) => value.toLocaleString('tr-TR') + ' ₺'}
+                  />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="gelir" 
+                    stroke="hsl(var(--primary))" 
+                    name="Gelir"
+                    strokeWidth={2}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="gider" 
+                    stroke="hsl(var(--destructive))" 
+                    name="Gider"
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Aktif Proje
-              </CardTitle>
-              <FolderKanban className="h-4 w-4 text-muted-foreground" />
+            <CardHeader>
+              <CardTitle>Proje Durumları</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{activeProjects ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Devam eden projeler
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Sosyal Medya
-              </CardTitle>
-              <Share2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{socialAccounts ?? 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Yönetilen hesaplar
-              </p>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={projectStatusData || []}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="hsl(var(--primary))"
+                    dataKey="value"
+                  >
+                    {(projectStatusData || []).map((entry: any, index: number) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={[
+                          'hsl(var(--primary))',
+                          'hsl(var(--secondary))',
+                          'hsl(var(--destructive))',
+                          'hsl(var(--muted))'
+                        ][index % 4]} 
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>
