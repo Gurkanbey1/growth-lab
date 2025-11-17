@@ -330,7 +330,6 @@ const Expenses = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Toplam Gider</CardTitle>
               <div className="flex items-center gap-2 text-2xl font-bold text-destructive">
-                <DollarSign className="h-6 w-6" />
                 {totalExpenses.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} TL
               </div>
             </CardHeader>
