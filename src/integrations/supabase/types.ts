@@ -613,6 +613,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_projects_with_debt: {
+        Args: never
+        Returns: {
+          company_email: string
+          company_id: string
+          company_name: string
+          project_id: string
+          project_name: string
+          remaining_amount: number
+        }[]
+      }
+      get_upcoming_domain_expirations: {
+        Args: { days_ahead?: number }
+        Returns: {
+          company_id: string
+          company_name: string
+          days_until_expiry: number
+          domain_id: string
+          domain_name: string
+          expire_date: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
