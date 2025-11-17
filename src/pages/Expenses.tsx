@@ -83,8 +83,26 @@ const Expenses = () => {
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<Expense>) => {
-      const { error } = await supabase.from('expenses').insert([data as any]);
+      const { data: result, error } = await supabase.from('expenses').insert([data as any]).select().single();
       if (error) throw error;
+      
+      // Send Telegram notification
+      try {
+        await supabase.functions.invoke("notify-telegram", {
+          body: {
+            type: "expense_added",
+            data: {
+              amount: result.amount,
+              description: result.description,
+              category: result.category,
+            },
+          },
+        });
+      } catch (notifyError) {
+        console.error("Failed to send Telegram notification:", notifyError);
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['expenses'] });

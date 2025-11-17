@@ -85,8 +85,30 @@ const Revenues = () => {
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<Revenue>) => {
-      const { error } = await supabase.from('revenues').insert([data as any]);
+      const { data: result, error } = await supabase
+        .from('revenues')
+        .insert([data as any])
+        .select('*, companies(name)')
+        .single();
       if (error) throw error;
+      
+      // Send Telegram notification
+      try {
+        await supabase.functions.invoke("notify-telegram", {
+          body: {
+            type: "revenue_added",
+            data: {
+              amount: result.amount,
+              description: result.description,
+              company: result.companies?.name,
+            },
+          },
+        });
+      } catch (notifyError) {
+        console.error("Failed to send Telegram notification:", notifyError);
+      }
+      
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['revenues'] });
