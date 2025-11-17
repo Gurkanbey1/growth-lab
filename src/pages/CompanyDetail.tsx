@@ -8,12 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, DollarSign, Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, DollarSign, Plus, TrendingUp, TrendingDown, Download, FileSpreadsheet } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { exportCompanyDetailToExcel, exportCompanyDetailToPDF } from '@/utils/exportUtils';
 
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -100,6 +101,22 @@ const CompanyDetail = () => {
       if (error) throw error;
       return data;
     },
+  });
+
+  const { data: paymentHistory } = useQuery({
+    queryKey: ['company-payment-history', id],
+    queryFn: async () => {
+      if (!projects) return [];
+      const projectIds = projects.map(p => p.id);
+      const { data, error } = await supabase
+        .from('project_payments')
+        .select('*, projects(name)')
+        .in('project_id', projectIds)
+        .order('payment_date', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!projects,
   });
 
   const totalDebt = projects?.reduce((sum, p) => sum + ((p.budget || 0) - (p.paid_amount || 0)), 0) || 0;
@@ -210,6 +227,18 @@ const CompanyDetail = () => {
       borç: p.remaining_amount || 0,
     })) : [];
 
+  const handleExportExcel = () => {
+    if (!company) return;
+    exportCompanyDetailToExcel(company, projects || [], revenues || [], expenses || [], domains || []);
+    toast({ title: 'Excel dosyası indirildi' });
+  };
+
+  const handleExportPDF = () => {
+    if (!company) return;
+    exportCompanyDetailToPDF(company, projects || [], revenues || [], expenses || [], domains || []);
+    toast({ title: 'PDF dosyası indirildi' });
+  };
+
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = { customer: 'Müşteri', freelancer: 'Freelancer', supplier: 'Tedarikçi' };
     return labels[type] || type;
@@ -262,6 +291,16 @@ const CompanyDetail = () => {
           <div className="flex-1">
             <h1 className="text-3xl font-bold">{company.name}</h1>
             <p className="text-muted-foreground">{getTypeLabel(company.type)}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExportExcel}>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Excel
+            </Button>
+            <Button variant="outline" onClick={handleExportPDF}>
+              <Download className="h-4 w-4 mr-2" />
+              PDF
+            </Button>
           </div>
         </div>
 
@@ -400,8 +439,9 @@ const CompanyDetail = () => {
         )}
 
         <Tabs defaultValue="projects" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="projects">Projeler ({projects?.length || 0})</TabsTrigger>
+            <TabsTrigger value="payments">Ödemeler ({paymentHistory?.length || 0})</TabsTrigger>
             <TabsTrigger value="domains">Domainler ({domains?.length || 0})</TabsTrigger>
             <TabsTrigger value="social">Sosyal Medya ({socialAccounts?.length || 0})</TabsTrigger>
             <TabsTrigger value="revenues">Gelirler ({revenues?.length || 0})</TabsTrigger>
@@ -463,6 +503,42 @@ const CompanyDetail = () => {
                           </TableRow>
                         );
                       })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="payments" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Ödeme Geçmişi</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!paymentHistory || paymentHistory.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">Henüz ödeme bulunmuyor.</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Proje</TableHead>
+                        <TableHead>Tutar</TableHead>
+                        <TableHead>Ödeme Tarihi</TableHead>
+                        <TableHead>Notlar</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paymentHistory.map((payment: any) => (
+                        <TableRow key={payment.id}>
+                          <TableCell className="font-medium">{payment.projects?.name}</TableCell>
+                          <TableCell className="text-green-600 font-semibold">
+                            {payment.amount.toLocaleString('tr-TR')} TL
+                          </TableCell>
+                          <TableCell>{new Date(payment.payment_date).toLocaleDateString('tr-TR')}</TableCell>
+                          <TableCell>{payment.notes || '-'}</TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 )}
