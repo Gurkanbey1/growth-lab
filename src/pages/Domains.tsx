@@ -45,13 +45,13 @@ const Domains = () => {
   const [csvText, setCsvText] = useState('');
   const [csvDateType, setCsvDateType] = useState<'start' | 'expire'>('expire');
   const [formData, setFormData] = useState<Partial<Domain>>({
-    company_id: '',
+    company_id: undefined,
     domain_name: '',
     type: 'domain',
-    start_date: '',
+    start_date: undefined,
     expire_date: '',
-    registrar: '',
-    notes: '',
+    registrar: undefined,
+    notes: undefined,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -150,10 +150,20 @@ const Domains = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clean up empty strings to null for optional fields
+    const cleanedData = {
+      ...formData,
+      company_id: formData.company_id || null,
+      start_date: formData.start_date || null,
+      registrar: formData.registrar || null,
+      notes: formData.notes || null,
+    };
+    
     if (editingDomain) {
-      updateMutation.mutate({ ...formData, id: editingDomain.id });
+      updateMutation.mutate({ ...cleanedData, id: editingDomain.id });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(cleanedData);
     }
   };
 
@@ -174,7 +184,7 @@ const Domains = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingDomain(null);
-    setFormData({ company_id: '', domain_name: '', type: 'domain', start_date: '', expire_date: '' });
+    setFormData({ company_id: undefined, domain_name: '', type: 'domain', start_date: undefined, expire_date: '', registrar: undefined, notes: undefined });
   };
 
   const getDaysUntilExpiry = (expireDate: string) => {
@@ -251,7 +261,7 @@ const Domains = () => {
             </Dialog>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingDomain(null); setFormData({ company_id: '', domain_name: '', type: 'domain', start_date: '', expire_date: '' }); }}>
+                <Button onClick={() => { setEditingDomain(null); setFormData({ company_id: undefined, domain_name: '', type: 'domain', start_date: undefined, expire_date: '', registrar: undefined, notes: undefined }); }}>
                   <Plus className="mr-2 h-4 w-4" />
                   Yeni Kayıt
                 </Button>

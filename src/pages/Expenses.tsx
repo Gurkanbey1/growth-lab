@@ -45,13 +45,13 @@ const Expenses = () => {
   const [open, setOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formData, setFormData] = useState<Partial<Expense>>({
-    company_id: '',
+    company_id: undefined,
     amount: 0,
     description: '',
-    category: '',
+    category: undefined,
     frequency: 'once',
     payment_day: undefined,
-    next_payment_date: '',
+    next_payment_date: undefined,
     is_active: true,
   });
   const { toast } = useToast();
@@ -176,10 +176,19 @@ const Expenses = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clean up empty strings to null for optional UUID fields
+    const cleanedData = {
+      ...formData,
+      company_id: formData.company_id || null,
+      category: formData.category || null,
+      next_payment_date: formData.next_payment_date || null,
+    };
+    
     if (editingExpense) {
-      updateMutation.mutate({ ...formData, id: editingExpense.id });
+      updateMutation.mutate({ ...cleanedData, id: editingExpense.id });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(cleanedData);
     }
   };
 
@@ -192,7 +201,7 @@ const Expenses = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingExpense(null);
-    setFormData({ company_id: '', amount: 0, description: '', frequency: 'once', is_active: true });
+    setFormData({ company_id: undefined, amount: 0, description: '', frequency: 'once', is_active: true });
   };
 
   const getFrequencyLabel = (freq: ExpenseFrequency) => {
@@ -210,7 +219,7 @@ const Expenses = () => {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingExpense(null); setFormData({ company_id: '', amount: 0, description: '', frequency: 'once', is_active: true }); }}>
+              <Button onClick={() => { setEditingExpense(null); setFormData({ company_id: undefined, amount: 0, description: '', frequency: 'once', is_active: true }); }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Yeni Gider
               </Button>
