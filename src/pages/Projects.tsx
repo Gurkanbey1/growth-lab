@@ -162,7 +162,8 @@ const Projects = () => {
       const newPaidAmount = (project.paid_amount || 0) + amount;
       const newRemainingAmount = (project.budget || 0) - newPaidAmount;
       
-      const { error } = await supabase
+      // Update project
+      const { error: projectError } = await supabase
         .from('projects')
         .update({ 
           paid_amount: newPaidAmount,
@@ -170,7 +171,20 @@ const Projects = () => {
         })
         .eq('id', projectId);
       
-      if (error) throw error;
+      if (projectError) throw projectError;
+
+      // Add payment history
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error: paymentError } = await supabase
+        .from('project_payments')
+        .insert({
+          project_id: projectId,
+          amount,
+          payment_date: new Date().toISOString().split('T')[0],
+          created_by: user?.id,
+        });
+
+      if (paymentError) throw paymentError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

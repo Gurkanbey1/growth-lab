@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, FolderKanban, Share2, TrendingUp, DollarSign, Loader2 } from 'lucide-react';
+import { Building2, FolderKanban, Share2, TrendingUp, DollarSign, Loader2, AlertCircle, Globe } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { Badge } from '@/components/ui/badge';
 
 const Index = () => {
   const { data: companies } = useQuery({
@@ -32,20 +33,27 @@ const Index = () => {
     },
   });
 
-  const { data: monthlyRevenue, isLoading: revenueLoading } = useQuery({
-    queryKey: ['monthly-revenue'],
+  const { data: totalDebt, isLoading: debtLoading } = useQuery({
+    queryKey: ['total-debt'],
     queryFn: async () => {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      const endOfMonth = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 0);
-      
-      const { data } = await supabase
-        .from('revenues')
-        .select('amount')
-        .gte('revenue_date', startOfMonth.toISOString().split('T')[0])
-        .lte('revenue_date', endOfMonth.toISOString().split('T')[0]);
-      
+      const { data } = await supabase.from('projects').select('budget, paid_amount, remaining_amount');
+      return data?.reduce((sum, p) => sum + ((p.budget || 0) - (p.paid_amount || 0)), 0) || 0;
+    },
+  });
+
+  const { data: totalRevenue, isLoading: revenueLoading } = useQuery({
+    queryKey: ['total-revenue'],
+    queryFn: async () => {
+      const { data } = await supabase.from('revenues').select('amount');
       return data?.reduce((sum, r) => sum + Number(r.amount), 0) || 0;
+    },
+  });
+
+  const { data: totalExpense, isLoading: expenseLoading } = useQuery({
+    queryKey: ['total-expense'],
+    queryFn: async () => {
+      const { data } = await supabase.from('expenses').select('amount');
+      return data?.reduce((sum, e) => sum + Number(e.amount), 0) || 0;
     },
   });
 
@@ -101,6 +109,54 @@ const Index = () => {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Toplam Borç</CardTitle>
+              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {debtLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <div className={`text-2xl font-bold ${(totalDebt || 0) > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  {(totalDebt || 0).toLocaleString('tr-TR')} TL
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Toplam Gelir</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {revenueLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="text-2xl font-bold text-green-500">
+                  {(totalRevenue || 0).toLocaleString('tr-TR')} TL
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Toplam Gider</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {expenseLoading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="text-2xl font-bold text-orange-500">
+                  {(totalExpense || 0).toLocaleString('tr-TR')} TL
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Toplam Firma
               </CardTitle>
@@ -143,89 +199,66 @@ const Index = () => {
               </p>
             </CardContent>
           </Card>
+        </div>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Aylık Gelir
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {revenueLoading ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : (
-                  `${(monthlyRevenue ?? 0).toLocaleString('tr-TR')} TL`
+        <Card>
+          <CardHeader>
+            <CardTitle>Yaklaşan Ödemeler & Yenilemeler</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {upcomingLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {upcomingItems?.domains.map((domain) => (
+                  <div key={domain.domain_name} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Domain: {domain.domain_name}</span>
+                    <span className="font-medium">{new Date(domain.expire_date).toLocaleDateString('tr-TR')}</span>
+                  </div>
+                ))}
+                {upcomingItems?.socialMedia.map((sm) => (
+                  <div key={sm.account_name} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">SM: {sm.platform} - {sm.account_name}</span>
+                    <span className="font-medium">{new Date(sm.renewal_date).toLocaleDateString('tr-TR')}</span>
+                  </div>
+                ))}
+                {upcomingItems?.expenses.map((expense, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Gider: {expense.description}</span>
+                    <span className="font-medium">{new Date(expense.next_payment_date!).toLocaleDateString('tr-TR')}</span>
+                  </div>
+                ))}
+                {!upcomingItems?.domains.length && 
+                 !upcomingItems?.socialMedia.length && 
+                 !upcomingItems?.expenses.length && (
+                  <p className="text-sm text-muted-foreground">Yaklaşan hatırlatma bulunmuyor.</p>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Bu ay
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Yaklaşan Ödemeler & Yenilemeler</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {upcomingLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {upcomingItems?.domains.map((domain) => (
-                    <div key={domain.domain_name} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Domain: {domain.domain_name}</span>
-                      <span className="font-medium">{new Date(domain.expire_date).toLocaleDateString('tr-TR')}</span>
-                    </div>
-                  ))}
-                  {upcomingItems?.socialMedia.map((sm) => (
-                    <div key={sm.account_name} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">SM: {sm.platform} - {sm.account_name}</span>
-                      <span className="font-medium">{new Date(sm.renewal_date).toLocaleDateString('tr-TR')}</span>
-                    </div>
-                  ))}
-                  {upcomingItems?.expenses.map((expense, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Gider: {expense.description}</span>
-                      <span className="font-medium">{new Date(expense.next_payment_date!).toLocaleDateString('tr-TR')}</span>
-                    </div>
-                  ))}
-                  {!upcomingItems?.domains.length && 
-                   !upcomingItems?.socialMedia.length && 
-                   !upcomingItems?.expenses.length && (
-                    <p className="text-sm text-muted-foreground">Yaklaşan hatırlatma bulunmuyor.</p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Hızlı Erişim</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <a href="/projects" className="block p-2 hover:bg-accent rounded-md text-sm">
-                ➤ Proje Yönetimi
-              </a>
-              <a href="/revenues" className="block p-2 hover:bg-accent rounded-md text-sm">
-                ➤ Gelir Yönetimi
-              </a>
-              <a href="/expenses" className="block p-2 hover:bg-accent rounded-md text-sm">
-                ➤ Gider Yönetimi
-              </a>
-              <a href="/calendar" className="block p-2 hover:bg-accent rounded-md text-sm">
-                ➤ Takvim Görünümü
-              </a>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Hızlı Erişim</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <a href="/projects" className="block p-2 hover:bg-accent rounded-md text-sm">
+              ➤ Proje Yönetimi
+            </a>
+            <a href="/revenues" className="block p-2 hover:bg-accent rounded-md text-sm">
+              ➤ Gelir Yönetimi
+            </a>
+            <a href="/expenses" className="block p-2 hover:bg-accent rounded-md text-sm">
+              ➤ Gider Yönetimi
+            </a>
+            <a href="/calendar" className="block p-2 hover:bg-accent rounded-md text-sm">
+              ➤ Takvim Görünümü
+            </a>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   );
