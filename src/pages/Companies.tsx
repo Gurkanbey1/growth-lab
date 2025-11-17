@@ -59,11 +59,22 @@ const Companies = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('companies')
-        .select('*')
+        .select(`
+          *,
+          projects(budget, paid_amount, remaining_amount)
+        `)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data as Company[];
+      return data as (Company & { projects?: { budget: number; paid_amount: number; remaining_amount: number }[] })[];
     },
+  });
+
+  // Calculate total debt for each company
+  const companiesWithDebt = companies?.map(company => {
+    const totalBudget = company.projects?.reduce((sum, p) => sum + (p.budget || 0), 0) || 0;
+    const totalPaid = company.projects?.reduce((sum, p) => sum + (p.paid_amount || 0), 0) || 0;
+    const totalDebt = totalBudget - totalPaid;
+    return { ...company, totalDebt };
   });
 
   const createMutation = useMutation({
@@ -260,7 +271,7 @@ const Companies = () => {
               <div className="flex justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : companies?.length === 0 ? (
+            ) : companiesWithDebt?.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Henüz firma bulunmuyor.</p>
             ) : (
               <Table>
@@ -270,16 +281,26 @@ const Companies = () => {
                     <TableHead>Tip</TableHead>
                     <TableHead>E-posta</TableHead>
                     <TableHead>Telefon</TableHead>
+                    <TableHead>Toplam Borç</TableHead>
                     <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {companies?.map((company) => (
+                  {companiesWithDebt?.map((company) => (
                     <TableRow key={company.id}>
                       <TableCell className="font-medium">{company.name}</TableCell>
                       <TableCell>{getTypeBadge(company.type)}</TableCell>
                       <TableCell>{company.email || '-'}</TableCell>
                       <TableCell>{company.phone || '-'}</TableCell>
+                      <TableCell>
+                        {company.totalDebt > 0 ? (
+                          <span className="text-red-500 font-semibold">
+                            {company.totalDebt.toLocaleString('tr-TR')} TL
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(company)}>
                           <Pencil className="h-4 w-4" />
