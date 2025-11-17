@@ -23,7 +23,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 type ProjectStatus = 'active' | 'completed' | 'cancelled' | 'pending';
@@ -46,6 +46,9 @@ interface Project {
 
 const Projects = () => {
   const [open, setOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [projectStatuses, setProjectStatuses] = useState<string[]>(['active', 'pending', 'completed', 'cancelled']);
   const [formData, setFormData] = useState<Partial<Project>>({
@@ -105,7 +108,9 @@ const Projects = () => {
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<Project>) => {
-      const { error } = await supabase.from('projects').insert([data as any]);
+      const remaining = (data.budget || 0) - (data.paid_amount || 0);
+      const projectData = { ...data, remaining_amount: remaining };
+      const { error } = await supabase.from('projects').insert([projectData as any]);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -120,7 +125,9 @@ const Projects = () => {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...data }: Partial<Project> & { id: string }) => {
-      const { error } = await supabase.from('projects').update(data).eq('id', id);
+      const remaining = (data.budget || 0) - (data.paid_amount || 0);
+      const projectData = { ...data, remaining_amount: remaining };
+      const { error } = await supabase.from('projects').update(projectData).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -141,6 +148,35 @@ const Projects = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       toast({ title: 'Başarılı', description: 'Proje silindi.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Hata', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const addPaymentMutation = useMutation({
+    mutationFn: async ({ projectId, amount }: { projectId: string; amount: number }) => {
+      const project = projects?.find(p => p.id === projectId);
+      if (!project) throw new Error('Proje bulunamadı');
+      
+      const newPaidAmount = (project.paid_amount || 0) + amount;
+      const newRemainingAmount = (project.budget || 0) - newPaidAmount;
+      
+      const { error } = await supabase
+        .from('projects')
+        .update({ 
+          paid_amount: newPaidAmount,
+          remaining_amount: newRemainingAmount
+        })
+        .eq('id', projectId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast({ title: 'Başarılı', description: 'Ödeme eklendi.' });
+      setPaymentOpen(false);
+      setPaymentAmount(0);
     },
     onError: (error: any) => {
       toast({ title: 'Hata', description: error.message, variant: 'destructive' });
@@ -186,6 +222,44 @@ const Projects = () => {
     setOpen(false);
     setEditingProject(null);
     setFormData({ company_id: '', name: '', status: 'active', budget: 0, paid_amount: 0, description: undefined, start_date: undefined, end_date: undefined, assigned_to: undefined });
+  };
+
+  const handleOpenPayment = (project: Project) => {
+    setSelectedProject(project);
+    setPaymentAmount(0);
+    setPaymentOpen(true);
+  };
+
+  const handleClosePayment = () => {
+    setPaymentOpen(false);
+    setSelectedProject(null);
+    setPaymentAmount(0);
+  };
+
+  const handleAddPayment = () => {
+    if (!selectedProject || paymentAmount <= 0) {
+      toast({ 
+        title: 'Hata', 
+        description: 'Geçerli bir ödeme tutarı girin',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    const remaining = (selectedProject.budget || 0) - (selectedProject.paid_amount || 0);
+    if (paymentAmount > remaining) {
+      toast({ 
+        title: 'Hata', 
+        description: 'Ödeme tutarı kalan bakiyeden fazla olamaz',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    addPaymentMutation.mutate({ 
+      projectId: selectedProject.id, 
+      amount: paymentAmount 
+    });
   };
 
   const getStatusBadge = (status: ProjectStatus) => {
@@ -360,34 +434,104 @@ const Projects = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {projects?.map((project) => (
-                    <TableRow key={project.id}>
-                      <TableCell className="font-medium">{project.name}</TableCell>
-                      <TableCell>{project.companies?.name}</TableCell>
-                      <TableCell>{getStatusBadge(project.status)}</TableCell>
-                      <TableCell>{project.budget.toLocaleString('tr-TR')} TL</TableCell>
-                      <TableCell>{project.paid_amount.toLocaleString('tr-TR')} TL</TableCell>
-                      <TableCell className="font-medium">{((project.remaining_amount || 0)).toLocaleString('tr-TR')} TL</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(project)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteMutation.mutate(project.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {projects?.map((project) => {
+                    const remaining = (project.budget || 0) - (project.paid_amount || 0);
+                    return (
+                      <TableRow key={project.id}>
+                        <TableCell className="font-medium">{project.name}</TableCell>
+                        <TableCell>{project.companies?.name}</TableCell>
+                        <TableCell>{getStatusBadge(project.status)}</TableCell>
+                        <TableCell>{Number(project.budget).toLocaleString('tr-TR')} TL</TableCell>
+                        <TableCell>{Number(project.paid_amount || 0).toLocaleString('tr-TR')} TL</TableCell>
+                        <TableCell>
+                          <span className={remaining > 0 ? 'text-red-500 font-semibold' : 'text-green-500'}>
+                            {remaining.toLocaleString('tr-TR')} TL
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {remaining > 0 && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenPayment(project)}
+                              >
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                Ödeme Ekle
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(project)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteMutation.mutate(project.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
           </CardContent>
         </Card>
+
+        {/* Payment Dialog */}
+        <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Ödeme Ekle - {selectedProject?.name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Proje Bilgileri</Label>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Bütçe:</span>{' '}
+                    <span className="font-semibold">{Number(selectedProject?.budget || 0).toLocaleString('tr-TR')} TL</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ödenen:</span>{' '}
+                    <span className="font-semibold">{Number(selectedProject?.paid_amount || 0).toLocaleString('tr-TR')} TL</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Kalan Borç:</span>{' '}
+                    <span className="font-semibold text-red-500">
+                      {((selectedProject?.budget || 0) - (selectedProject?.paid_amount || 0)).toLocaleString('tr-TR')} TL
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="payment_amount">Ödeme Tutarı (TL)</Label>
+                <Input
+                  id="payment_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={paymentAmount || ''}
+                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                  placeholder="Ödeme tutarını girin"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleAddPayment} disabled={addPaymentMutation.isPending}>
+                  {addPaymentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Ödeme Ekle
+                </Button>
+                <Button type="button" variant="outline" onClick={handleClosePayment}>
+                  İptal
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
