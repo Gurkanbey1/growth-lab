@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { AIQuickCreate } from './AIQuickCreate';
 
 interface LayoutProps {
   children: ReactNode;
@@ -50,12 +51,13 @@ const Sidebar = ({ className }: { className?: string }) => {
 
   return (
     <div className={cn('flex flex-col h-full bg-sidebar text-sidebar-foreground', className)}>
-      <div className="p-6 border-b border-sidebar-border">
+      <div className="p-6 border-b border-sidebar-border space-y-4">
         <img 
           src="https://www.windmedya.com/assets/img/logo/logo.png" 
           alt="Wind Medya" 
           className="h-10 w-auto object-contain"
         />
+        <AIQuickCreate />
       </div>
       
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
