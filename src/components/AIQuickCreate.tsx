@@ -68,8 +68,12 @@ export function AIQuickCreate() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 text-foreground">
-          <Sparkles className="h-4 w-4" />
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="gap-2 text-foreground bg-gradient-to-r from-primary/10 via-primary/5 to-transparent hover:from-primary/20 hover:via-primary/10 hover:to-primary/5 hover:scale-105 transition-all duration-300 shadow-md hover:shadow-lg animate-pulse hover:animate-none border-primary/20"
+        >
+          <Sparkles className="h-4 w-4 text-primary" />
           AI ile Oluştur
         </Button>
       </DialogTrigger>

@@ -151,6 +151,17 @@ Firma tipi belirtilmemişse "customer" kullan. Proje durumu belirtilmemişse "ac
     const entities = JSON.parse(toolCall.function.arguments);
     console.log("Parsed entities:", entities);
 
+    // Check if company already exists
+    const { data: existingCompany } = await supabase
+      .from("companies")
+      .select("id, name")
+      .ilike("name", entities.company.name)
+      .single();
+
+    if (existingCompany) {
+      throw new Error(`"${existingCompany.name}" isimli firma zaten mevcut`);
+    }
+
     // Create company
     const { data: company, error: companyError } = await supabase
       .from("companies")
