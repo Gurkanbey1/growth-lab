@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 
 interface CalendarEvent {
   date: string;
-  type: 'domain' | 'social_media' | 'expense';
+  type: 'domain' | 'social_media' | 'expense' | 'note';
   title: string;
   subtitle?: string;
 }
@@ -25,7 +25,7 @@ const Calendar = () => {
       const startDate = new Date(year, month, 1);
       const endDate = new Date(year, month + 1, 0);
 
-      const [domains, socialMedia, expenses] = await Promise.all([
+      const [domains, socialMedia, expenses, notes] = await Promise.all([
         supabase
           .from('domains')
           .select('domain_name, expire_date')
@@ -43,6 +43,13 @@ const Calendar = () => {
           .not('next_payment_date', 'is', null)
           .gte('next_payment_date', startDate.toISOString().split('T')[0])
           .lte('next_payment_date', endDate.toISOString().split('T')[0]),
+        supabase
+          .from('notes')
+          .select('title, note_type, due_date')
+          .not('due_date', 'is', null)
+          .eq('is_completed', false)
+          .gte('due_date', startDate.toISOString())
+          .lte('due_date', endDate.toISOString()),
       ]);
 
       const allEvents: CalendarEvent[] = [
@@ -61,6 +68,11 @@ const Calendar = () => {
           date: e.next_payment_date!,
           type: 'expense' as const,
           title: `Gider: ${e.description}`,
+        })),
+        ...(notes.data || []).map((n) => ({
+          date: n.due_date!.split('T')[0],
+          type: 'note' as const,
+          title: n.note_type === 'task' ? `Görev: ${n.title}` : n.note_type === 'reminder' ? `Hatırlatma: ${n.title}` : `Not: ${n.title}`,
         })),
       ];
 

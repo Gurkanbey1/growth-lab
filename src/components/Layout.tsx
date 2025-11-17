@@ -10,6 +10,7 @@ import {
   DollarSign,
   TrendingUp,
   Calendar,
+  StickyNote,
   Users,
   LogOut,
   Menu,
@@ -32,6 +33,7 @@ const navigation = [
   { name: 'Gelirler', href: '/revenues', icon: TrendingUp },
   { name: 'Giderler', href: '/expenses', icon: DollarSign },
   { name: 'Takvim', href: '/calendar', icon: Calendar },
+  { name: 'Notlar', href: '/notes', icon: StickyNote },
   { name: 'Ayarlar', href: '/settings', icon: Settings },
 ];
 
