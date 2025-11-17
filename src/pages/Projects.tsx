@@ -51,13 +51,13 @@ const Projects = () => {
   const [formData, setFormData] = useState<Partial<Project>>({
     company_id: '',
     name: '',
-    description: '',
+    description: undefined,
     status: 'active',
     budget: 0,
     paid_amount: 0,
-    start_date: '',
-    end_date: '',
-    assigned_to: '',
+    start_date: undefined,
+    end_date: undefined,
+    assigned_to: undefined,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -149,10 +149,20 @@ const Projects = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clean up empty strings to null for optional fields
+    const cleanedData = {
+      ...formData,
+      description: formData.description || null,
+      start_date: formData.start_date || null,
+      end_date: formData.end_date || null,
+      assigned_to: formData.assigned_to || null,
+    };
+    
     if (editingProject) {
-      updateMutation.mutate({ ...formData, id: editingProject.id });
+      updateMutation.mutate({ ...cleanedData, id: editingProject.id });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(cleanedData);
     }
   };
 
@@ -175,7 +185,7 @@ const Projects = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingProject(null);
-    setFormData({ company_id: '', name: '', status: 'active', budget: 0, paid_amount: 0 });
+    setFormData({ company_id: '', name: '', status: 'active', budget: 0, paid_amount: 0, description: undefined, start_date: undefined, end_date: undefined, assigned_to: undefined });
   };
 
   const getStatusBadge = (status: ProjectStatus) => {
@@ -199,7 +209,7 @@ const Projects = () => {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingProject(null); setFormData({ company_id: '', name: '', status: 'active', budget: 0, paid_amount: 0 }); }}>
+              <Button onClick={() => { setEditingProject(null); setFormData({ company_id: '', name: '', status: 'active', budget: 0, paid_amount: 0, description: undefined, start_date: undefined, end_date: undefined, assigned_to: undefined }); }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Yeni Proje
               </Button>

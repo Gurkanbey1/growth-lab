@@ -45,11 +45,11 @@ const Companies = () => {
   const [formData, setFormData] = useState<Partial<Company>>({
     name: '',
     type: 'customer',
-    email: '',
-    phone: '',
-    address: '',
-    tax_number: '',
-    notes: '',
+    email: undefined,
+    phone: undefined,
+    address: undefined,
+    tax_number: undefined,
+    notes: undefined,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -112,10 +112,21 @@ const Companies = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clean up empty strings to null for optional fields
+    const cleanedData = {
+      ...formData,
+      email: formData.email || null,
+      phone: formData.phone || null,
+      address: formData.address || null,
+      tax_number: formData.tax_number || null,
+      notes: formData.notes || null,
+    };
+    
     if (editingCompany) {
-      updateMutation.mutate({ ...formData, id: editingCompany.id });
+      updateMutation.mutate({ ...cleanedData, id: editingCompany.id });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(cleanedData);
     }
   };
 
@@ -128,7 +139,7 @@ const Companies = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingCompany(null);
-    setFormData({ name: '', type: 'customer', email: '', phone: '', address: '', tax_number: '', notes: '' });
+    setFormData({ name: '', type: 'customer', email: undefined, phone: undefined, address: undefined, tax_number: undefined, notes: undefined });
   };
 
   const getTypeLabel = (type: CompanyType) => {
@@ -151,7 +162,7 @@ const Companies = () => {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingCompany(null); setFormData({ name: '', type: 'customer' }); }}>
+              <Button onClick={() => { setEditingCompany(null); setFormData({ name: '', type: 'customer', email: undefined, phone: undefined, address: undefined, tax_number: undefined, notes: undefined }); }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Yeni Firma
               </Button>

@@ -46,7 +46,7 @@ const SocialMedia = () => {
     account_name: '',
     monthly_fee: 0,
     renewal_date: '',
-    notes: '',
+    notes: undefined,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -154,10 +154,18 @@ const SocialMedia = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clean up empty strings to null for optional fields
+    const cleanedData = {
+      ...formData,
+      notes: formData.notes || null,
+      monthly_fee: formData.monthly_fee || null,
+    };
+    
     if (editingAccount) {
-      updateMutation.mutate({ ...formData, id: editingAccount.id });
+      updateMutation.mutate({ ...cleanedData, id: editingAccount.id });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(cleanedData);
     }
   };
 
@@ -177,7 +185,7 @@ const SocialMedia = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingAccount(null);
-    setFormData({ company_id: '', platform: '', account_name: '', monthly_fee: 0, renewal_date: '' });
+    setFormData({ company_id: '', platform: '', account_name: '', monthly_fee: 0, renewal_date: '', notes: undefined });
   };
 
   const getDaysUntilRenewal = (renewalDate: string) => {
@@ -198,7 +206,7 @@ const SocialMedia = () => {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingAccount(null); setFormData({ company_id: '', platform: '', account_name: '', monthly_fee: 0, renewal_date: '' }); }}>
+              <Button onClick={() => { setEditingAccount(null); setFormData({ company_id: '', platform: '', account_name: '', monthly_fee: 0, renewal_date: '', notes: undefined }); }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Yeni Hesap
               </Button>

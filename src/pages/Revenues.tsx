@@ -41,12 +41,12 @@ const Revenues = () => {
   const [open, setOpen] = useState(false);
   const [editingRevenue, setEditingRevenue] = useState<Revenue | null>(null);
   const [formData, setFormData] = useState<Partial<Revenue>>({
-    company_id: '',
-    project_id: '',
+    company_id: undefined,
+    project_id: undefined,
     amount: 0,
     description: '',
     revenue_date: new Date().toISOString().split('T')[0],
-    invoice_number: '',
+    invoice_number: undefined,
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -129,10 +129,19 @@ const Revenues = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Clean up empty strings to null for optional UUID fields
+    const cleanedData = {
+      ...formData,
+      company_id: formData.company_id || null,
+      project_id: formData.project_id || null,
+      invoice_number: formData.invoice_number || null,
+    };
+    
     if (editingRevenue) {
-      updateMutation.mutate({ ...formData, id: editingRevenue.id });
+      updateMutation.mutate({ ...cleanedData, id: editingRevenue.id });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(cleanedData);
     }
   };
 
@@ -152,7 +161,7 @@ const Revenues = () => {
   const handleClose = () => {
     setOpen(false);
     setEditingRevenue(null);
-    setFormData({ company_id: '', project_id: '', amount: 0, description: '', revenue_date: new Date().toISOString().split('T')[0] });
+    setFormData({ company_id: undefined, project_id: undefined, amount: 0, description: '', revenue_date: new Date().toISOString().split('T')[0], invoice_number: undefined });
   };
 
   const filteredProjects = formData.company_id 
@@ -169,7 +178,7 @@ const Revenues = () => {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingRevenue(null); setFormData({ company_id: '', project_id: '', amount: 0, description: '', revenue_date: new Date().toISOString().split('T')[0] }); }}>
+              <Button onClick={() => { setEditingRevenue(null); setFormData({ company_id: undefined, project_id: undefined, amount: 0, description: '', revenue_date: new Date().toISOString().split('T')[0], invoice_number: undefined }); }}>
                 <Plus className="mr-2 h-4 w-4" />
                 Yeni Gelir
               </Button>
