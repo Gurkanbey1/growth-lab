@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ interface Company {
 }
 
 const Companies = () => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [formData, setFormData] = useState<Partial<Company>>({
@@ -288,7 +290,14 @@ const Companies = () => {
                 <TableBody>
                   {companiesWithDebt?.map((company) => (
                     <TableRow key={company.id}>
-                      <TableCell className="font-medium">{company.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <button
+                          onClick={() => navigate(`/companies/${company.id}`)}
+                          className="text-primary hover:underline"
+                        >
+                          {company.name}
+                        </button>
+                      </TableCell>
                       <TableCell>{getTypeBadge(company.type)}</TableCell>
                       <TableCell>{company.email || '-'}</TableCell>
                       <TableCell>{company.phone || '-'}</TableCell>
