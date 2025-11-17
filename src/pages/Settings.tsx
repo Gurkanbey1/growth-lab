@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Settings as SettingsIcon, Save } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, Save, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import * as XLSX from 'xlsx';
 
 export default function Settings() {
   const { toast } = useToast();
@@ -113,6 +114,58 @@ export default function Settings() {
     saveSettingsMutation.mutate(userSettings);
   };
 
+  const handleExportDatabase = async () => {
+    try {
+      toast({ title: "İndiriliyor...", description: "Veritabanı yedekleniyor, lütfen bekleyin." });
+      
+      const tables = [
+        'companies',
+        'projects',
+        'revenues',
+        'expenses',
+        'expense_payments',
+        'domains',
+        'social_media_accounts',
+        'notes',
+        'profiles',
+        'user_roles',
+        'user_settings',
+        'project_payments',
+        'ai_prompt_history'
+      ] as const;
+
+      const workbook = XLSX.utils.book_new();
+
+      for (const table of tables) {
+        const { data, error } = await supabase
+          .from(table)
+          .select('*');
+        
+        if (error) {
+          console.error(`Error fetching ${table}:`, error);
+          continue;
+        }
+
+        if (data && data.length > 0) {
+          const worksheet = XLSX.utils.json_to_sheet(data);
+          XLSX.utils.book_append_sheet(workbook, worksheet, String(table));
+        }
+      }
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `database-backup-${timestamp}.xlsx`);
+      
+      toast({ title: "Başarılı", description: "Veritabanı başarıyla indirildi." });
+    } catch (error: any) {
+      console.error('Export error:', error);
+      toast({ 
+        title: "Hata", 
+        description: "Veritabanı yedeklenirken bir hata oluştu.", 
+        variant: "destructive" 
+      });
+    }
+  };
+
   const ekle = (liste: string[], setListe: (list: string[]) => void, deger: string, setDeger: (val: string) => void) => {
     if (!deger.trim()) {
       toast({ title: "Hata", description: "Boş değer eklenemez.", variant: "destructive" });
@@ -211,6 +264,19 @@ export default function Settings() {
                     TL (Türk Lirası)
                   </Badge>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Veritabanı Yedeği</CardTitle>
+                <CardDescription>Tüm veritabanını Excel formatında indirin</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleExportDatabase} className="w-full sm:w-auto">
+                  <Download className="h-4 w-4 mr-2" />
+                  Veritabanını İndir
+                </Button>
               </CardContent>
             </Card>
 
