@@ -9,56 +9,33 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        toast({
-          title: 'Hoş geldiniz!',
-          description: 'Başarıyla giriş yaptınız.',
-        });
-        navigate('/');
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-            },
-            emailRedirectTo: `${window.location.origin}/`,
-          },
-        });
-
-        if (error) throw error;
-
-        toast({
-          title: 'Hesap oluşturuldu!',
-          description: 'Başarıyla kayıt oldunuz. Giriş yapabilirsiniz.',
-        });
-        navigate('/');
-      }
+      toast({
+        title: 'Hoş geldiniz!',
+        description: 'Başarıyla giriş yaptınız.',
+      });
+      navigate('/');
     } catch (error: any) {
       toast({
         title: 'Hata',
-        description: error.message || 'Bir hata oluştu.',
+        description: error.message || 'E-posta veya şifre hatalı.',
         variant: 'destructive',
       });
     } finally {
@@ -74,26 +51,11 @@ const Auth = () => {
             Wind Medya CRM
           </CardTitle>
           <CardDescription className="text-center">
-            {isLogin
-              ? 'Hesabınıza giriş yapın'
-              : 'Yeni hesap oluşturun'}
+            Hesabınıza giriş yapın
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Ad Soyad</Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  placeholder="Adınız Soyadınız"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
-              </div>
-            )}
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">E-posta</Label>
               <Input
@@ -123,17 +85,7 @@ const Auth = () => {
               disabled={loading}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLogin ? 'Giriş Yap' : 'Kayıt Ol'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full"
-              onClick={() => setIsLogin(!isLogin)}
-            >
-              {isLogin
-                ? 'Hesabınız yok mu? Kayıt olun'
-                : 'Zaten hesabınız var mı? Giriş yapın'}
+              Giriş Yap
             </Button>
           </form>
         </CardContent>
