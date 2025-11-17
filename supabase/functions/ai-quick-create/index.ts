@@ -7,22 +7,43 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Helper function to calculate string similarity
-function calculateSimilarity(str1: string, str2: string): number {
+// Helper function to calculate Levenshtein distance
+function levenshteinDistance(str1: string, str2: string): number {
   const len1 = str1.length;
   const len2 = str2.length;
-  const maxLen = Math.max(len1, len2);
-  
-  if (maxLen === 0) return 1.0;
-  
-  let matches = 0;
-  const minLen = Math.min(len1, len2);
-  
-  for (let i = 0; i < minLen; i++) {
-    if (str1[i] === str2[i]) matches++;
+  const matrix: number[][] = [];
+
+  if (len1 === 0) return len2;
+  if (len2 === 0) return len1;
+
+  // Initialize matrix
+  for (let i = 0; i <= len1; i++) {
+    matrix[i] = [i];
   }
-  
-  return matches / maxLen;
+  for (let j = 0; j <= len2; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill matrix
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // deletion
+        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+
+  return matrix[len1][len2];
+}
+
+// Helper function to calculate string similarity using Levenshtein
+function calculateSimilarity(str1: string, str2: string): number {
+  const distance = levenshteinDistance(str1, str2);
+  const maxLen = Math.max(str1.length, str2.length);
+  return 1 - (distance / maxLen);
 }
 
 serve(async (req) => {
@@ -221,7 +242,6 @@ Firma tipi belirtilmemişse "customer" kullan. Proje durumu belirtilmemişse "ac
     }
 
     // Create project
-    // Create project
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .insert({
@@ -267,6 +287,15 @@ Firma tipi belirtilmemişse "customer" kullan. Proje durumu belirtilmemişse "ac
       }
       expense = expenseData;
     }
+
+    // Save prompt to history
+    await supabase
+      .from("ai_prompt_history")
+      .insert({
+        user_id: user.id,
+        prompt: prompt,
+        result_summary: `${company.name} firması ve ${project.name} projesi oluşturuldu`
+      });
 
     return new Response(
       JSON.stringify({

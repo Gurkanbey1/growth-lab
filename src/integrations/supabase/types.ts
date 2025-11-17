@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_prompt_history: {
+        Row: {
+          created_at: string
+          id: string
+          prompt: string
+          result_summary: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          prompt: string
+          result_summary?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          prompt?: string
+          result_summary?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           address: string | null

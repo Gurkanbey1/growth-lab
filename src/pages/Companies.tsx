@@ -26,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 
 type CompanyType = 'customer' | 'freelancer' | 'supplier';
 
@@ -44,6 +45,8 @@ const Companies = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [companyToDelete, setCompanyToDelete] = useState<Company | null>(null);
   const [formData, setFormData] = useState<Partial<Company>>({
     name: '',
     type: 'customer',
@@ -117,11 +120,26 @@ const Companies = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['companies'] });
       toast({ title: 'Başarılı', description: 'Firma silindi.' });
+      setDeleteDialogOpen(false);
+      setCompanyToDelete(null);
     },
     onError: (error: any) => {
       toast({ title: 'Hata', description: error.message, variant: 'destructive' });
+      setDeleteDialogOpen(false);
+      setCompanyToDelete(null);
     },
   });
+
+  const handleDeleteClick = (company: Company) => {
+    setCompanyToDelete(company);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (companyToDelete) {
+      deleteMutation.mutate(companyToDelete.id);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,7 +335,7 @@ const Companies = () => {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => deleteMutation.mutate(company.id)}
+                          onClick={() => handleDeleteClick(company)}
                           disabled={deleteMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -331,6 +349,13 @@ const Companies = () => {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteConfirm}
+        itemName={companyToDelete?.name}
+      />
     </Layout>
   );
 };
