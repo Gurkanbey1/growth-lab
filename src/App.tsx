@@ -14,6 +14,7 @@ import Domains from "./pages/Domains";
 import Revenues from "./pages/Revenues";
 import Expenses from "./pages/Expenses";
 import Calendar from "./pages/Calendar";
+import Notes from "./pages/Notes";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -73,6 +74,7 @@ const App = () => (
             <Route path="/revenues" element={<ProtectedRoute><Revenues /></ProtectedRoute>} />
             <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
             <Route path="/calendar" element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
+            <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
