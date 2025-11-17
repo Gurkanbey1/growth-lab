@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Users from "./pages/Users";
 import Companies from "./pages/Companies";
+import CompanyDetail from "./pages/CompanyDetail";
 import Projects from "./pages/Projects";
 import SocialMedia from "./pages/SocialMedia";
 import Domains from "./pages/Domains";
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
             <Route path="/companies" element={<ProtectedRoute><Companies /></ProtectedRoute>} />
+            <Route path="/companies/:id" element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><Projects /></ProtectedRoute>} />
             <Route path="/social-media" element={<ProtectedRoute><SocialMedia /></ProtectedRoute>} />
             <Route path="/domains" element={<ProtectedRoute><Domains /></ProtectedRoute>} />
