@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Settings as SettingsIcon, Save, Download } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, Save, Download, Database, FileArchive } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 export default function Settings() {
   const { toast } = useToast();
@@ -166,6 +167,108 @@ export default function Settings() {
     }
   };
 
+  const handleExportDatabaseSQL = async () => {
+    try {
+      toast({ title: "İndiriliyor...", description: "SQL yedeği oluşturuluyor, lütfen bekleyin." });
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Oturum bulunamadı');
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-database-sql`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('SQL yedeği alınamadı');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database-backup-${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Başarılı", description: "SQL yedeği başarıyla indirildi." });
+    } catch (error: any) {
+      console.error('SQL Export error:', error);
+      toast({ 
+        title: "Hata", 
+        description: "SQL yedeği alınırken bir hata oluştu.", 
+        variant: "destructive" 
+      });
+    }
+  };
+
+  const handleExportProjectFiles = async () => {
+    try {
+      toast({ title: "İndiriliyor...", description: "Proje dosyaları ziplenirken lütfen bekleyin. Bu işlem birkaç dakika sürebilir." });
+      
+      const zip = new JSZip();
+      
+      // Project files to include
+      const filesToInclude = [
+        'src/App.tsx',
+        'src/App.css',
+        'src/main.tsx',
+        'src/index.css',
+        'src/vite-env.d.ts',
+        'src/lib/utils.ts',
+        'index.html',
+        'package.json',
+        'tsconfig.json',
+        'vite.config.ts',
+        'tailwind.config.ts',
+        'README.md'
+      ];
+
+      // Fetch and add each file
+      for (const file of filesToInclude) {
+        try {
+          const response = await fetch(`/${file}`);
+          if (response.ok) {
+            const content = await response.text();
+            zip.file(file, content);
+          }
+        } catch (error) {
+          console.error(`Could not fetch ${file}:`, error);
+        }
+      }
+
+      // Generate zip
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `project-files-${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Başarılı", description: "Proje dosyaları başarıyla indirildi." });
+    } catch (error: any) {
+      console.error('File export error:', error);
+      toast({ 
+        title: "Hata", 
+        description: "Dosyalar ziplenirken bir hata oluştu.", 
+        variant: "destructive" 
+      });
+    }
+  };
+
   const ekle = (liste: string[], setListe: (list: string[]) => void, deger: string, setDeger: (val: string) => void) => {
     if (!deger.trim()) {
       toast({ title: "Hata", description: "Boş değer eklenemez.", variant: "destructive" });
@@ -270,12 +373,31 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle>Veritabanı Yedeği</CardTitle>
-                <CardDescription>Tüm veritabanını Excel formatında indirin</CardDescription>
+                <CardDescription>Tüm veritabanını farklı formatlarda indirin</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Button onClick={handleExportDatabase} className="flex-1">
+                    <Download className="h-4 w-4 mr-2" />
+                    Excel Formatında İndir
+                  </Button>
+                  <Button onClick={handleExportDatabaseSQL} variant="secondary" className="flex-1">
+                    <Database className="h-4 w-4 mr-2" />
+                    SQL Formatında İndir
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Proje Dosyaları</CardTitle>
+                <CardDescription>Tüm proje kaynak kodlarını zipleyip indirin</CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleExportDatabase} className="w-full sm:w-auto">
-                  <Download className="h-4 w-4 mr-2" />
-                  Veritabanını İndir
+                <Button onClick={handleExportProjectFiles} variant="outline" className="w-full sm:w-auto">
+                  <FileArchive className="h-4 w-4 mr-2" />
+                  Dosyaları Zipleyip İndir
                 </Button>
               </CardContent>
             </Card>
