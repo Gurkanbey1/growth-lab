@@ -133,6 +133,16 @@ const Notes = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!currentUser) {
+      toast({
+        title: "Hata",
+        description: "Kullanıcı girişi yapılmamış",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const cleanedData = {
       ...formData,
       due_date: formData.due_date || null,
@@ -141,7 +151,7 @@ const Notes = () => {
     if (editingNote) {
       updateMutation.mutate({ ...cleanedData, id: editingNote.id });
     } else {
-      createMutation.mutate(cleanedData);
+      createMutation.mutate({ ...cleanedData, user_id: currentUser.id });
     }
   };
 
