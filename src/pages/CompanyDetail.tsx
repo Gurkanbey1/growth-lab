@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import Layout from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,14 +8,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, Trash2, Plus, Pencil } from 'lucide-react';
+import { ArrowLeft, Building2, Mail, Phone, MapPin, FileText, DollarSign, Plus, TrendingUp, TrendingDown } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
 
   const { data: company, isLoading } = useQuery({
     queryKey: ['company', id],
@@ -97,6 +105,110 @@ const CompanyDetail = () => {
   const totalDebt = projects?.reduce((sum, p) => sum + ((p.budget || 0) - (p.paid_amount || 0)), 0) || 0;
   const totalRevenue = revenues?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0;
   const totalExpense = expenses?.reduce((sum, e) => sum + (e.amount || 0), 0) || 0;
+
+  const addPaymentMutation = useMutation({
+    mutationFn: async ({ projectId, amount }: { projectId: string; amount: number }) => {
+      const project = projects?.find(p => p.id === projectId);
+      if (!project) throw new Error('Proje bulunamadı');
+
+      const newPaidAmount = (project.paid_amount || 0) + amount;
+      const newRemainingAmount = (project.budget || 0) - newPaidAmount;
+
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          paid_amount: newPaidAmount,
+          remaining_amount: newRemainingAmount,
+        })
+        .eq('id', projectId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-projects', id] });
+      toast({ title: 'Ödeme başarıyla eklendi' });
+      setPaymentOpen(false);
+      setPaymentAmount('');
+      setSelectedProject(null);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: 'Hata', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    },
+  });
+
+  const handleOpenPayment = (project: any) => {
+    setSelectedProject(project);
+    setPaymentOpen(true);
+  };
+
+  const handleClosePayment = () => {
+    setPaymentOpen(false);
+    setPaymentAmount('');
+    setSelectedProject(null);
+  };
+
+  const handleAddPayment = () => {
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ 
+        title: 'Hata', 
+        description: 'Geçerli bir tutar girin', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    const remaining = selectedProject.remaining_amount || 0;
+    if (amount > remaining) {
+      toast({ 
+        title: 'Hata', 
+        description: 'Ödeme tutarı kalan borçtan fazla olamaz', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    addPaymentMutation.mutate({ projectId: selectedProject.id, amount });
+  };
+
+  // Prepare chart data for revenue/expense
+  const monthlyData = revenues && expenses ? (() => {
+    const dataMap = new Map<string, { month: string; gelir: number; gider: number }>();
+    
+    revenues.forEach(r => {
+      const month = new Date(r.revenue_date).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short' });
+      if (!dataMap.has(month)) {
+        dataMap.set(month, { month, gelir: 0, gider: 0 });
+      }
+      dataMap.get(month)!.gelir += r.amount;
+    });
+
+    expenses.forEach(e => {
+      const month = new Date(e.created_at).toLocaleDateString('tr-TR', { year: 'numeric', month: 'short' });
+      if (!dataMap.has(month)) {
+        dataMap.set(month, { month, gelir: 0, gider: 0 });
+      }
+      dataMap.get(month)!.gider += e.amount;
+    });
+
+    return Array.from(dataMap.values()).sort((a, b) => {
+      const dateA = new Date(a.month);
+      const dateB = new Date(b.month);
+      return dateA.getTime() - dateB.getTime();
+    });
+  })() : [];
+
+  // Prepare debt tracking data
+  const debtData = projects ? projects
+    .filter(p => p.remaining_amount && p.remaining_amount > 0)
+    .map(p => ({
+      name: p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name,
+      borç: p.remaining_amount || 0,
+    })) : [];
 
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = { customer: 'Müşteri', freelancer: 'Freelancer', supplier: 'Tedarikçi' };
@@ -237,6 +349,56 @@ const CompanyDetail = () => {
           </CardContent>
         </Card>
 
+        {(monthlyData.length > 0 || debtData.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {monthlyData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Aylık Gelir/Gider Grafiği
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={monthlyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip formatter={(value: any) => `${value.toLocaleString('tr-TR')} TL`} />
+                      <Legend />
+                      <Line type="monotone" dataKey="gelir" stroke="hsl(var(--chart-1))" name="Gelir" strokeWidth={2} />
+                      <Line type="monotone" dataKey="gider" stroke="hsl(var(--chart-2))" name="Gider" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {debtData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingDown className="h-5 w-5" />
+                    Borç Takip Grafiği
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={debtData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip formatter={(value: any) => `${value.toLocaleString('tr-TR')} TL`} />
+                      <Bar dataKey="borç" fill="hsl(var(--destructive))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         <Tabs defaultValue="projects" className="w-full">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="projects">Projeler ({projects?.length || 0})</TabsTrigger>
@@ -268,23 +430,39 @@ const CompanyDetail = () => {
                         <TableHead>Ödenen</TableHead>
                         <TableHead>Kalan</TableHead>
                         <TableHead>Atanan</TableHead>
+                        <TableHead>İşlemler</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {projects.map((project) => (
-                        <TableRow key={project.id}>
-                          <TableCell className="font-medium">{project.name}</TableCell>
-                          <TableCell>{getStatusBadge(project.status)}</TableCell>
-                          <TableCell>{project.budget.toLocaleString('tr-TR')} TL</TableCell>
-                          <TableCell>{project.paid_amount.toLocaleString('tr-TR')} TL</TableCell>
-                          <TableCell>
-                            <span className={project.remaining_amount && project.remaining_amount > 0 ? 'text-red-500 font-semibold' : 'text-muted-foreground'}>
-                              {(project.remaining_amount || 0).toLocaleString('tr-TR')} TL
-                            </span>
-                          </TableCell>
-                          <TableCell>{(project as any).profiles?.full_name || '-'}</TableCell>
-                        </TableRow>
-                      ))}
+                      {projects.map((project) => {
+                        const remaining = project.remaining_amount || 0;
+                        return (
+                          <TableRow key={project.id}>
+                            <TableCell className="font-medium">{project.name}</TableCell>
+                            <TableCell>{getStatusBadge(project.status)}</TableCell>
+                            <TableCell>{project.budget.toLocaleString('tr-TR')} TL</TableCell>
+                            <TableCell>{project.paid_amount.toLocaleString('tr-TR')} TL</TableCell>
+                            <TableCell>
+                              <span className={remaining > 0 ? 'text-red-500 font-semibold' : 'text-muted-foreground'}>
+                                {remaining.toLocaleString('tr-TR')} TL
+                              </span>
+                            </TableCell>
+                            <TableCell>{(project as any).profiles?.full_name || '-'}</TableCell>
+                            <TableCell>
+                              {remaining > 0 && (
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => handleOpenPayment(project)}
+                                >
+                                  <DollarSign className="h-4 w-4 mr-1" />
+                                  Ödeme Ekle
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 )}
@@ -456,6 +634,61 @@ const CompanyDetail = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Ödeme Ekle</DialogTitle>
+              <DialogDescription>
+                {selectedProject?.name} projesine ödeme ekleyin
+              </DialogDescription>
+            </DialogHeader>
+            
+            {selectedProject && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Bütçe</p>
+                    <p className="font-semibold">{selectedProject.budget.toLocaleString('tr-TR')} TL</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Ödenen</p>
+                    <p className="font-semibold">{selectedProject.paid_amount.toLocaleString('tr-TR')} TL</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Kalan Borç</p>
+                    <p className="font-semibold text-red-500">
+                      {(selectedProject.remaining_amount || 0).toLocaleString('tr-TR')} TL
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="payment-amount">Ödeme Tutarı (TL)</Label>
+                  <Input
+                    id="payment-amount"
+                    type="number"
+                    placeholder="0.00"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    min="0"
+                    max={selectedProject.remaining_amount || 0}
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={handleClosePayment}>
+                İptal
+              </Button>
+              <Button onClick={handleAddPayment} disabled={addPaymentMutation.isPending}>
+                {addPaymentMutation.isPending ? 'Ekleniyor...' : 'Ödeme Ekle'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
