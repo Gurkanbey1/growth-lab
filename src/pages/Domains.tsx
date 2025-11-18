@@ -124,28 +124,83 @@ const Domains = () => {
   const bulkImportMutation = useMutation({
     mutationFn: async () => {
       const lines = csvText.split('\n').filter(line => line.trim());
+
+      const normalizeDate = (raw: string): string | null => {
+        const value = raw.trim();
+        if (!value) return null;
+
+        // Eğer zaten YYYY-MM-DD ise olduğu gibi kullan
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          return value;
+        }
+
+        // Ortak ayraçları destekle: 01.01.2025, 01/01/2025, 01-01-2025
+        const separatorMatch = value.match(/[.\/-]/);
+        if (!separatorMatch) return null;
+        const sep = separatorMatch[0];
+        const parts = value.split(sep).map(p => p.trim());
+
+        if (parts.length !== 3) return null;
+
+        let day: number, month: number, year: number;
+
+        // Yıl başta: 2025-01-31
+        if (parts[0].length === 4) {
+          year = Number(parts[0]);
+          month = Number(parts[1]);
+          day = Number(parts[2]);
+        } else {
+          // Gün/Ay/Yıl varsay: 31.01.2025 veya 31.01.25
+          day = Number(parts[0]);
+          month = Number(parts[1]);
+          year = Number(parts[2].length === 2 ? `20${parts[2]}` : parts[2]);
+        }
+
+        if (!year || !month || !day) return null;
+
+        const jsDate = new Date(year, month - 1, day);
+        if (Number.isNaN(jsDate.getTime())) return null;
+
+        // JS `Date` doğrulaması (ay/gün taşması olmamalı)
+        if (
+          jsDate.getFullYear() !== year ||
+          jsDate.getMonth() !== month - 1 ||
+          jsDate.getDate() !== day
+        ) {
+          return null;
+        }
+
+        const mm = String(month).padStart(2, '0');
+        const dd = String(day).padStart(2, '0');
+        return `${year}-${mm}-${dd}`;
+      };
+
       const domains = lines
         .map(line => {
-          const [domain_name, date] = line.split(',').map(s => s.trim());
-          
-          // Skip lines with missing data
-          if (!domain_name || !date) {
+          const [domain_name_raw, date_raw] = line.split(',');
+          const domain_name = domain_name_raw?.trim();
+          const normalizedDate = date_raw ? normalizeDate(date_raw) : null;
+
+          // Zorunlu alanlar: domain_name + geçerli tarih
+          if (!domain_name || !normalizedDate) {
             return null;
           }
-          
+
           return {
             domain_name,
             type: 'domain',
-            start_date: csvDateType === 'start' ? date : null,
-            expire_date: csvDateType === 'expire' ? date : date, // expire_date is required, so use date if start_date was selected
+            start_date: csvDateType === 'start' ? normalizedDate : null,
+            expire_date: csvDateType === 'expire' ? normalizedDate : normalizedDate,
           };
         })
-        .filter(domain => domain !== null);
-      
+        .filter((domain): domain is { domain_name: string; type: string; start_date: string | null; expire_date: string } =>
+          domain !== null
+        );
+
       if (domains.length === 0) {
-        throw new Error('CSV dosyasında geçerli kayıt bulunamadı. Her satırda "alan_adı,tarih" formatı olmalı.');
+        throw new Error('CSV dosyasında geçerli kayıt bulunamadı. Her satır "alan.com,01.01.2025" gibi bir tarih içermeli.');
       }
-      
+
       const { error } = await supabase.from('domains').insert(domains as any);
       if (error) throw error;
     },
