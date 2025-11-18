@@ -285,14 +285,25 @@ const Domains = () => {
   const groupedDomains = useMemo(() => {
     if (!domains) return {};
     
-    return domains.reduce((groups, domain) => {
-      const monthYear = format(new Date(domain.expire_date), 'MMMM yyyy', { locale: tr });
-      if (!groups[monthYear]) {
-        groups[monthYear] = [];
+    const groups = domains.reduce((groups, domain) => {
+      const month = format(new Date(domain.expire_date), 'MMMM', { locale: tr });
+      if (!groups[month]) {
+        groups[month] = [];
       }
-      groups[monthYear].push(domain);
+      groups[month].push(domain);
       return groups;
     }, {} as Record<string, Domain[]>);
+
+    // Sort by month order (Ocak to Aralık)
+    const monthOrder = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+    const sortedGroups: Record<string, Domain[]> = {};
+    monthOrder.forEach(month => {
+      if (groups[month]) {
+        sortedGroups[month] = groups[month];
+      }
+    });
+    
+    return sortedGroups;
   }, [domains]);
 
   return (
@@ -499,9 +510,9 @@ const Domains = () => {
               <p className="text-center text-muted-foreground py-8">Henüz kayıt bulunmuyor.</p>
             ) : (
               <div className="space-y-6">
-                {Object.entries(groupedDomains).map(([monthYear, domainsInMonth]) => (
-                  <div key={monthYear}>
-                    <h3 className="text-lg font-semibold mb-3 text-primary">{monthYear}</h3>
+                {Object.entries(groupedDomains).map(([month, domainsInMonth]) => (
+                  <div key={month}>
+                    <h3 className="text-lg font-semibold mb-3 text-primary">{month}</h3>
                     <Table>
                       <TableHeader>
                         <TableRow>
