@@ -173,7 +173,16 @@ serve(async (req) => {
             "/gider <tutar> <açıklama> - Gider ekle\n" +
             "/gelir <tutar> <açıklama> - Gelir ekle\n" +
             "/ozet - Aylık özet görüntüle\n" +
+            "/chatid - Chat ID'nizi öğrenin\n" +
             "/yardim - Yardım mesajı"
+        );
+        break;
+
+      case "/chatid":
+        await sendTelegramMessage(
+          chatId,
+          `📋 <b>Chat ID'niz:</b> <code>${chatId}</code>\n\n` +
+            "Bu ID'yi ayarlar sayfasında 'Telegram Chat ID' alanına yapıştırın."
         );
         break;
 
@@ -197,7 +206,8 @@ serve(async (req) => {
             "Örnek: /gider 500 Elektrik faturası\n\n" +
             "/gelir <tutar> <açıklama> - Gelir ekle\n" +
             "Örnek: /gelir 5000 Proje ödemesi\n\n" +
-            "/ozet - Bu ay için gelir/gider özeti\n" +
+            "/ozet - Bu ay için gelir/gider özeti\n\n" +
+            "/chatid - Chat ID'nizi öğrenin\n\n" +
             "/yardim - Bu yardım mesajı"
         );
         break;
