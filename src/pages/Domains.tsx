@@ -44,6 +44,9 @@ const Domains = () => {
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
   const [csvText, setCsvText] = useState('');
   const [csvDateType, setCsvDateType] = useState<'start' | 'expire'>('expire');
+  const [csvType, setCsvType] = useState<'domain' | 'hosting' | 'ssl'>('domain');
+  const [csvCompanyId, setCsvCompanyId] = useState<string>('');
+  const [csvRegistrar, setCsvRegistrar] = useState<string>('');
   const [formData, setFormData] = useState<Partial<Domain>>({
     company_id: undefined,
     domain_name: '',
@@ -188,12 +191,14 @@ const Domains = () => {
 
           return {
             domain_name,
-            type: 'domain',
+            type: csvType,
+            company_id: csvCompanyId || null,
+            registrar: csvRegistrar || null,
             start_date: csvDateType === 'start' ? normalizedDate : null,
             expire_date: csvDateType === 'expire' ? normalizedDate : normalizedDate,
           };
         })
-        .filter((domain): domain is { domain_name: string; type: string; start_date: string | null; expire_date: string } =>
+        .filter((domain): domain is { domain_name: string; type: 'domain' | 'hosting' | 'ssl'; company_id: string | null; registrar: string | null; start_date: string | null; expire_date: string } =>
           domain !== null
         );
 
@@ -209,6 +214,9 @@ const Domains = () => {
       toast({ title: 'Başarılı', description: 'Domainler toplu olarak eklendi.' });
       setCsvOpen(false);
       setCsvText('');
+      setCsvType('domain');
+      setCsvCompanyId('');
+      setCsvRegistrar('');
     },
     onError: (error: any) => {
       toast({ title: 'Hata', description: error.message, variant: 'destructive' });
@@ -294,6 +302,43 @@ const Domains = () => {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
+                    <Label>Tip</Label>
+                    <Select value={csvType} onValueChange={(value: 'domain' | 'hosting' | 'ssl') => setCsvType(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="domain">Domain</SelectItem>
+                        <SelectItem value="hosting">Hosting</SelectItem>
+                        <SelectItem value="ssl">SSL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Firma (Opsiyonel)</Label>
+                    <Select value={csvCompanyId} onValueChange={setCsvCompanyId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Firma seçin" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Firma yok</SelectItem>
+                        {companies?.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Kayıt Firması (Opsiyonel)</Label>
+                    <Input
+                      placeholder="ör: GoDaddy, Namecheap"
+                      value={csvRegistrar}
+                      onChange={(e) => setCsvRegistrar(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label>Tarih Tipi</Label>
                     <Select value={csvDateType} onValueChange={(value: 'start' | 'expire') => setCsvDateType(value)}>
                       <SelectTrigger>
@@ -313,7 +358,7 @@ const Domains = () => {
                       onChange={(e) => setCsvText(e.target.value)}
                       rows={8}
                     />
-                    <p className="text-xs text-muted-foreground">Format: domain_adi, YYYY-MM-DD</p>
+                    <p className="text-xs text-muted-foreground">Format: domain_adi, YYYY-MM-DD veya DD.MM.YYYY</p>
                   </div>
                   <Button
                     onClick={() => bulkImportMutation.mutate()}
