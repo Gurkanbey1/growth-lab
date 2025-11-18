@@ -23,9 +23,9 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Loader2, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Upload, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
+import { format, addMonths, addYears } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 interface Domain {
@@ -43,9 +43,12 @@ interface Domain {
 const Domains = () => {
   const [open, setOpen] = useState(false);
   const [csvOpen, setCsvOpen] = useState(false);
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [renewingDomain, setRenewingDomain] = useState<Domain | null>(null);
+  const [renewPeriod, setRenewPeriod] = useState<string>('1year');
   const [editingDomain, setEditingDomain] = useState<Domain | null>(null);
   const [csvText, setCsvText] = useState('');
-  const [csvDateType, setCsvDateType] = useState<'start' | 'expire'>('expire');
+  const [csvDuration, setCsvDuration] = useState<string>('1year');
   const [csvType, setCsvType] = useState<'domain' | 'hosting' | 'ssl'>('domain');
   const [csvCompanyId, setCsvCompanyId] = useState<string>('none');
   const [csvRegistrar, setCsvRegistrar] = useState<string>('');
@@ -126,68 +129,93 @@ const Domains = () => {
     },
   });
 
+  const renewMutation = useMutation({
+    mutationFn: async ({ id, period }: { id: string; period: string }) => {
+      const domain = domains?.find(d => d.id === id);
+      if (!domain) throw new Error('Domain bulunamadı');
+
+      let newExpireDate: Date;
+      const currentExpire = new Date(domain.expire_date);
+
+      switch (period) {
+        case '1month':
+          newExpireDate = addMonths(currentExpire, 1);
+          break;
+        case '3months':
+          newExpireDate = addMonths(currentExpire, 3);
+          break;
+        case '6months':
+          newExpireDate = addMonths(currentExpire, 6);
+          break;
+        case '1year':
+          newExpireDate = addYears(currentExpire, 1);
+          break;
+        case '2years':
+          newExpireDate = addYears(currentExpire, 2);
+          break;
+        case '3years':
+          newExpireDate = addYears(currentExpire, 3);
+          break;
+        default:
+          newExpireDate = addYears(currentExpire, 1);
+      }
+
+      const { error } = await supabase
+        .from('domains')
+        .update({ expire_date: format(newExpireDate, 'yyyy-MM-dd') })
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['domains'] });
+      toast({ title: 'Başarılı', description: 'Domain yenilendi.' });
+      setRenewOpen(false);
+      setRenewingDomain(null);
+      setRenewPeriod('1year');
+    },
+    onError: (error: any) => {
+      toast({ title: 'Hata', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const bulkImportMutation = useMutation({
     mutationFn: async () => {
       const lines = csvText.split('\n').filter(line => line.trim());
 
-      const normalizeDate = (raw: string): string | null => {
-        const value = raw.trim();
-        if (!value) return null;
+      let calculatedExpireDate: Date;
+      const today = new Date();
 
-        // Eğer zaten YYYY-MM-DD ise olduğu gibi kullan
-        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-          return value;
-        }
+      switch (csvDuration) {
+        case '1month':
+          calculatedExpireDate = addMonths(today, 1);
+          break;
+        case '3months':
+          calculatedExpireDate = addMonths(today, 3);
+          break;
+        case '6months':
+          calculatedExpireDate = addMonths(today, 6);
+          break;
+        case '1year':
+          calculatedExpireDate = addYears(today, 1);
+          break;
+        case '2years':
+          calculatedExpireDate = addYears(today, 2);
+          break;
+        case '3years':
+          calculatedExpireDate = addYears(today, 3);
+          break;
+        default:
+          calculatedExpireDate = addYears(today, 1);
+      }
 
-        // Ortak ayraçları destekle: 01.01.2025, 01/01/2025, 01-01-2025
-        const separatorMatch = value.match(/[.\/-]/);
-        if (!separatorMatch) return null;
-        const sep = separatorMatch[0];
-        const parts = value.split(sep).map(p => p.trim());
-
-        if (parts.length !== 3) return null;
-
-        let day: number, month: number, year: number;
-
-        // Yıl başta: 2025-01-31
-        if (parts[0].length === 4) {
-          year = Number(parts[0]);
-          month = Number(parts[1]);
-          day = Number(parts[2]);
-        } else {
-          // Gün/Ay/Yıl varsay: 31.01.2025 veya 31.01.25
-          day = Number(parts[0]);
-          month = Number(parts[1]);
-          year = Number(parts[2].length === 2 ? `20${parts[2]}` : parts[2]);
-        }
-
-        if (!year || !month || !day) return null;
-
-        const jsDate = new Date(year, month - 1, day);
-        if (Number.isNaN(jsDate.getTime())) return null;
-
-        // JS `Date` doğrulaması (ay/gün taşması olmamalı)
-        if (
-          jsDate.getFullYear() !== year ||
-          jsDate.getMonth() !== month - 1 ||
-          jsDate.getDate() !== day
-        ) {
-          return null;
-        }
-
-        const mm = String(month).padStart(2, '0');
-        const dd = String(day).padStart(2, '0');
-        return `${year}-${mm}-${dd}`;
-      };
+      const expireDateStr = format(calculatedExpireDate, 'yyyy-MM-dd');
 
       const domains = lines
         .map(line => {
-          const [domain_name_raw, date_raw] = line.split(',');
-          const domain_name = domain_name_raw?.trim();
-          const normalizedDate = date_raw ? normalizeDate(date_raw) : null;
-
-          // Zorunlu alanlar: domain_name + geçerli tarih
-          if (!domain_name || !normalizedDate) {
+          const domain_name = line.trim();
+          
+          if (!domain_name) {
             return null;
           }
 
@@ -196,8 +224,8 @@ const Domains = () => {
             type: csvType,
             company_id: csvCompanyId === 'none' ? null : csvCompanyId,
             registrar: csvRegistrar || null,
-            start_date: csvDateType === 'start' ? normalizedDate : null,
-            expire_date: csvDateType === 'expire' ? normalizedDate : normalizedDate,
+            start_date: null,
+            expire_date: expireDateStr,
           };
         })
         .filter((domain): domain is { domain_name: string; type: 'domain' | 'hosting' | 'ssl'; company_id: string | null; registrar: string | null; start_date: string | null; expire_date: string } =>
@@ -205,7 +233,7 @@ const Domains = () => {
         );
 
       if (domains.length === 0) {
-        throw new Error('CSV dosyasında geçerli kayıt bulunamadı. Her satır "alan.com,01.01.2025" gibi bir tarih içermeli.');
+        throw new Error('CSV dosyasında geçerli kayıt bulunamadı.');
       }
 
       const { error } = await supabase.from('domains').insert(domains as any);
@@ -216,6 +244,7 @@ const Domains = () => {
       toast({ title: 'Başarılı', description: 'Domainler toplu olarak eklendi.' });
       setCsvOpen(false);
       setCsvText('');
+      setCsvDuration('1year');
       setCsvType('domain');
       setCsvCompanyId('none');
       setCsvRegistrar('');
@@ -365,26 +394,30 @@ const Domains = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Tarih Tipi</Label>
-                    <Select value={csvDateType} onValueChange={(value: 'start' | 'expire') => setCsvDateType(value)}>
+                    <Label>Süre</Label>
+                    <Select value={csvDuration} onValueChange={setCsvDuration}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="start">Başlangıç Tarihi</SelectItem>
-                        <SelectItem value="expire">Bitiş Tarihi</SelectItem>
+                        <SelectItem value="1month">1 Ay</SelectItem>
+                        <SelectItem value="3months">3 Ay</SelectItem>
+                        <SelectItem value="6months">6 Ay</SelectItem>
+                        <SelectItem value="1year">1 Yıl</SelectItem>
+                        <SelectItem value="2years">2 Yıl</SelectItem>
+                        <SelectItem value="3years">3 Yıl</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label>CSV Verisi (her satır: domain, tarih)</Label>
+                    <Label>CSV Verisi (her satır bir domain)</Label>
                     <Textarea
-                      placeholder="example.com, 2025-12-31&#10;test.com, 2025-11-30"
+                      placeholder="example.com&#10;test.com&#10;mysite.com"
                       value={csvText}
                       onChange={(e) => setCsvText(e.target.value)}
                       rows={8}
                     />
-                    <p className="text-xs text-muted-foreground">Format: domain_adi, YYYY-MM-DD veya DD.MM.YYYY</p>
+                    <p className="text-xs text-muted-foreground">Her satıra bir domain adı yazın. Bitiş tarihi seçilen süreye göre otomatik hesaplanacak.</p>
                   </div>
                   <Button
                     onClick={() => bulkImportMutation.mutate()}
@@ -494,6 +527,47 @@ const Domains = () => {
                 </form>
               </DialogContent>
             </Dialog>
+            <Dialog open={renewOpen} onOpenChange={setRenewOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Domain Yenile</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>{renewingDomain?.domain_name}</strong> için yenileme süresi seçin:
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Yenileme Süresi</Label>
+                    <Select value={renewPeriod} onValueChange={setRenewPeriod}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1month">1 Ay</SelectItem>
+                        <SelectItem value="3months">3 Ay</SelectItem>
+                        <SelectItem value="6months">6 Ay</SelectItem>
+                        <SelectItem value="1year">1 Yıl</SelectItem>
+                        <SelectItem value="2years">2 Yıl</SelectItem>
+                        <SelectItem value="3years">3 Yıl</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => renewingDomain && renewMutation.mutate({ id: renewingDomain.id, period: renewPeriod })}
+                      disabled={renewMutation.isPending}
+                      className="flex-1"
+                    >
+                      {renewMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Yenile
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setRenewOpen(false)}>
+                      İptal
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -545,6 +619,17 @@ const Domains = () => {
                                 </span>
                               </TableCell>
                               <TableCell className="text-right space-x-2" onClick={(e) => e.stopPropagation()}>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => {
+                                    setRenewingDomain(domain);
+                                    setRenewOpen(true);
+                                  }}
+                                  title="Yenile"
+                                >
+                                  <RefreshCw className="h-4 w-4 text-primary" />
+                                </Button>
                                 <Button variant="ghost" size="icon" onClick={() => handleEdit(domain)}>
                                   <Pencil className="h-4 w-4" />
                                 </Button>
