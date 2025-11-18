@@ -124,15 +124,27 @@ const Domains = () => {
   const bulkImportMutation = useMutation({
     mutationFn: async () => {
       const lines = csvText.split('\n').filter(line => line.trim());
-      const domains = lines.map(line => {
-        const [domain_name, date] = line.split(',').map(s => s.trim());
-        return {
-          domain_name,
-          type: 'domain',
-          [csvDateType === 'start' ? 'start_date' : 'expire_date']: date,
-          [csvDateType === 'start' ? 'expire_date' : 'start_date']: date,
-        };
-      });
+      const domains = lines
+        .map(line => {
+          const [domain_name, date] = line.split(',').map(s => s.trim());
+          
+          // Skip lines with missing data
+          if (!domain_name || !date) {
+            return null;
+          }
+          
+          return {
+            domain_name,
+            type: 'domain',
+            start_date: csvDateType === 'start' ? date : null,
+            expire_date: csvDateType === 'expire' ? date : date, // expire_date is required, so use date if start_date was selected
+          };
+        })
+        .filter(domain => domain !== null);
+      
+      if (domains.length === 0) {
+        throw new Error('CSV dosyasında geçerli kayıt bulunamadı. Her satırda "alan_adı,tarih" formatı olmalı.');
+      }
       
       const { error } = await supabase.from('domains').insert(domains as any);
       if (error) throw error;
