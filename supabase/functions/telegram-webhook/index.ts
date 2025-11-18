@@ -44,75 +44,135 @@ async function sendTelegramMessage(chatId: number, text: string) {
   });
 }
 
-async function handleExpenseAdd(chatId: number, params: string[]) {
-  // Format: /gider <tutar> <açıklama> <kategori(opsiyonel)>
-  if (params.length < 2) {
+async function handleAIMessage(chatId: number, message: string) {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    if (!LOVABLE_API_KEY) {
+      await sendTelegramMessage(chatId, "❌ AI yapılandırması eksik.");
+      return;
+    }
+
+    console.log("Calling AI with message:", message);
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: `Sen bir finans takip asistanısın. Kullanıcının mesajını analiz et ve gider veya gelir bilgisi içeriyorsa JSON formatında döndür.
+
+Kurallar:
+1. Gider mesajlarında: {"type": "expense", "amount": <tutar>, "description": "<açıklama>"}
+2. Gelir mesajlarında: {"type": "revenue", "amount": <tutar>, "description": "<açıklama>"}
+3. Eğer net bir finansal işlem yoksa veya kullanıcı sohbet ediyorsa: {"type": "chat", "response": "<dostça yanıt>"}
+4. Tutarları sadece sayı olarak döndür (para birimi ekleme)
+5. Kısa ve öz açıklamalar kullan
+
+Örnekler:
+- "150 lira yemek harcadım" → {"type":"expense","amount":150,"description":"Yemek"}
+- "3000 TL maaş aldım" → {"type":"revenue","amount":3000,"description":"Maaş"}
+- "Merhaba" → {"type":"chat","response":"Merhaba! Size nasıl yardımcı olabilirim?"}
+- "Bu ay ne kadar harcadım?" → {"type":"chat","response":"Aylık özet için /ozet komutunu kullanabilirsiniz."}`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("AI API error:", response.status, await response.text());
+      await sendTelegramMessage(chatId, "❌ AI ile bağlantı kurulamadı.");
+      return;
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
+    console.log("AI response:", aiResponse);
+
+    // JSON'u parse et
+    const parsed = JSON.parse(aiResponse);
+
+    if (parsed.type === "expense") {
+      // Gider ekle
+      const { error } = await supabase.from("expenses").insert({
+        amount: parsed.amount,
+        description: parsed.description,
+        category: "Genel",
+        frequency: "once",
+      });
+
+      if (error) {
+        console.error("Expense insert error:", error);
+        await sendTelegramMessage(chatId, "❌ Gider eklenirken hata oluştu.");
+        return;
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `✅ Gider eklendi!\n\n💸 Tutar: ${parsed.amount.toLocaleString("tr-TR")} TL\n📝 Açıklama: ${parsed.description}`
+      );
+
+      // Bildirim gönder
+      await supabase.functions.invoke("notify-telegram", {
+        body: {
+          type: "expense_added",
+          data: {
+            amount: parsed.amount,
+            description: parsed.description,
+          },
+        },
+      });
+
+    } else if (parsed.type === "revenue") {
+      // Gelir ekle
+      const { error } = await supabase.from("revenues").insert({
+        amount: parsed.amount,
+        description: parsed.description,
+        revenue_date: new Date().toISOString().split("T")[0],
+      });
+
+      if (error) {
+        console.error("Revenue insert error:", error);
+        await sendTelegramMessage(chatId, "❌ Gelir eklenirken hata oluştu.");
+        return;
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `✅ Gelir eklendi!\n\n💰 Tutar: ${parsed.amount.toLocaleString("tr-TR")} TL\n📝 Açıklama: ${parsed.description}`
+      );
+
+      // Bildirim gönder
+      await supabase.functions.invoke("notify-telegram", {
+        body: {
+          type: "revenue_added",
+          data: {
+            amount: parsed.amount,
+            description: parsed.description,
+          },
+        },
+      });
+
+    } else if (parsed.type === "chat") {
+      await sendTelegramMessage(chatId, parsed.response);
+    }
+
+  } catch (error) {
+    console.error("AI processing error:", error);
     await sendTelegramMessage(
       chatId,
-      "❌ Kullanım: /gider <tutar> <açıklama> <kategori(opsiyonel)>\n\nÖrnek: /gider 500 Elektrik faturası Faturalar"
-    );
-    return;
-  }
-
-  const amount = parseFloat(params[0]);
-  if (isNaN(amount)) {
-    await sendTelegramMessage(chatId, "❌ Geçersiz tutar!");
-    return;
-  }
-
-  const description = params.slice(1, params.length - (params.length > 2 ? 1 : 0)).join(" ");
-  const category = params.length > 2 ? params[params.length - 1] : null;
-
-  const { error } = await supabase.from("expenses").insert({
-    amount,
-    description,
-    category,
-    frequency: "once",
-    is_active: true,
-  });
-
-  if (error) {
-    console.error("Error adding expense:", error);
-    await sendTelegramMessage(chatId, `❌ Hata: ${error.message}`);
-  } else {
-    await sendTelegramMessage(
-      chatId,
-      `✅ Gider eklendi!\n💰 Tutar: ${amount.toLocaleString("tr-TR")} TL\n📝 Açıklama: ${description}${category ? `\n🏷️ Kategori: ${category}` : ""}`
-    );
-  }
-}
-
-async function handleRevenueAdd(chatId: number, params: string[]) {
-  // Format: /gelir <tutar> <açıklama>
-  if (params.length < 2) {
-    await sendTelegramMessage(
-      chatId,
-      "❌ Kullanım: /gelir <tutar> <açıklama>\n\nÖrnek: /gelir 5000 Proje ödemesi"
-    );
-    return;
-  }
-
-  const amount = parseFloat(params[0]);
-  if (isNaN(amount)) {
-    await sendTelegramMessage(chatId, "❌ Geçersiz tutar!");
-    return;
-  }
-
-  const description = params.slice(1).join(" ");
-
-  const { error } = await supabase.from("revenues").insert({
-    amount,
-    description,
-    revenue_date: new Date().toISOString().split("T")[0],
-  });
-
-  if (error) {
-    console.error("Error adding revenue:", error);
-    await sendTelegramMessage(chatId, `❌ Hata: ${error.message}`);
-  } else {
-    await sendTelegramMessage(
-      chatId,
-      `✅ Gelir eklendi!\n💰 Tutar: ${amount.toLocaleString("tr-TR")} TL\n📝 Açıklama: ${description}`
+      "❌ Mesajınız işlenirken bir hata oluştu. Lütfen tekrar deneyin."
     );
   }
 }
@@ -168,10 +228,13 @@ serve(async (req) => {
       case "/start":
         await sendTelegramMessage(
           chatId,
-          "👋 Hoş geldiniz! Wind Medya CRM Bot'a hoş geldiniz.\n\n" +
-            "📋 <b>Komutlar:</b>\n" +
-            "/gider <tutar> <açıklama> - Gider ekle\n" +
-            "/gelir <tutar> <açıklama> - Gelir ekle\n" +
+          "👋 Merhaba! AI destekli finans takip botuna hoş geldiniz.\n\n" +
+            "🤖 Artık doğal dille konuşarak gider ve gelir ekleyebilirsiniz!\n\n" +
+            "Örnekler:\n" +
+            "• '500 lira elektrik faturası ödedim'\n" +
+            "• '3000 TL proje ödemesi aldım'\n" +
+            "• 'Bugün market alışverişine 250 lira harcadım'\n\n" +
+            "Özel komutlar:\n" +
             "/ozet - Aylık özet görüntüle\n" +
             "/chatid - Chat ID'nizi öğrenin\n" +
             "/yardim - Yardım mesajı"
@@ -186,14 +249,6 @@ serve(async (req) => {
         );
         break;
 
-      case "/gider":
-        await handleExpenseAdd(chatId, params);
-        break;
-
-      case "/gelir":
-        await handleRevenueAdd(chatId, params);
-        break;
-
       case "/ozet":
         await handleSummary(chatId);
         break;
@@ -201,22 +256,23 @@ serve(async (req) => {
       case "/yardim":
         await sendTelegramMessage(
           chatId,
-          "📋 <b>Komut Listesi:</b>\n\n" +
-            "/gider <tutar> <açıklama> <kategori> - Gider ekle\n" +
-            "Örnek: /gider 500 Elektrik faturası\n\n" +
-            "/gelir <tutar> <açıklama> - Gelir ekle\n" +
-            "Örnek: /gelir 5000 Proje ödemesi\n\n" +
-            "/ozet - Bu ay için gelir/gider özeti\n\n" +
-            "/chatid - Chat ID'nizi öğrenin\n\n" +
-            "/yardim - Bu yardım mesajı"
+          "📖 <b>Yardım</b>\n\n" +
+            "🤖 AI ile konuşarak gider ve gelir ekleyebilirsiniz!\n\n" +
+            "Örnekler:\n" +
+            "• 'Bugün 150 lira yemek harcadım'\n" +
+            "• '5000 TL maaş aldım'\n" +
+            "• 'Pazara 300 lira verdim'\n" +
+            "• '2500 TL freelance işten gelir'\n\n" +
+            "Özel komutlar:\n" +
+            "/ozet - Aylık finansal özet\n" +
+            "/chatid - Chat ID öğren\n" +
+            "/yardim - Bu mesaj"
         );
         break;
 
       default:
-        await sendTelegramMessage(
-          chatId,
-          "❓ Bilinmeyen komut. /yardim yazarak komutları görebilirsiniz."
-        );
+        // AI ile işle
+        await handleAIMessage(chatId, text);
     }
 
     return new Response("OK", { status: 200, headers: corsHeaders });
