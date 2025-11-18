@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-const TELEGRAM_CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID"); // Kullanıcının chat ID'sini buraya eklemesi gerekiyor
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -11,25 +10,41 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function sendTelegramMessage(text: string) {
-  if (!TELEGRAM_CHAT_ID) {
-    console.log("TELEGRAM_CHAT_ID not set, skipping notification");
-    return;
-  }
+const supabase = createClient(
+  SUPABASE_URL!,
+  SUPABASE_SERVICE_ROLE_KEY!
+);
 
+async function getChatIds() {
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('telegram_chat_id')
+    .not('telegram_chat_id', 'is', null);
+  
+  if (error) {
+    console.error("Error fetching chat IDs:", error);
+    return [];
+  }
+  
+  return data.map(row => row.telegram_chat_id).filter(Boolean);
+}
+
+async function sendTelegramMessage(chatId: string, text: string) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
+      chat_id: chatId,
       text,
       parse_mode: "HTML",
     }),
   });
 
   if (!response.ok) {
-    console.error("Failed to send Telegram message:", await response.text());
+    console.error(`Failed to send Telegram message to ${chatId}:`, await response.text());
+  } else {
+    console.log(`Message sent successfully to ${chatId}`);
   }
 }
 
@@ -78,16 +93,45 @@ serve(async (req) => {
           `⚠️ ${data.days_left} gün kaldı!`;
         break;
 
+      case "test":
+        message = data.message || `🧪 <b>Test Mesajı</b>\n\nSistem çalışıyor! ✅`;
+        break;
+
       default:
         message = `ℹ️ <b>Bildirim</b>\n\n${JSON.stringify(data, null, 2)}`;
     }
 
-    await sendTelegramMessage(message);
+    // Get all chat IDs from database
+    const chatIds = await getChatIds();
+    
+    if (chatIds.length === 0) {
+      console.log("No chat IDs found in database");
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: "No Telegram chat IDs configured" 
+        }), 
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    // Send message to all chat IDs
+    console.log(`Sending message to ${chatIds.length} chat(s)`);
+    await Promise.all(chatIds.map(chatId => sendTelegramMessage(chatId, message)));
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        sent_to: chatIds.length 
+      }), 
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     console.error("Error:", error);
     return new Response(JSON.stringify({ error: (error as Error).message }), {
