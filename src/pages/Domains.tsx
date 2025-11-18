@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Layout from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -25,6 +25,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Pencil, Trash2, Loader2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 interface Domain {
   id: string;
@@ -280,6 +282,19 @@ const Domains = () => {
     return <Badge variant={variant}>{label}</Badge>;
   };
 
+  const groupedDomains = useMemo(() => {
+    if (!domains) return {};
+    
+    return domains.reduce((groups, domain) => {
+      const monthYear = format(new Date(domain.expire_date), 'MMMM yyyy', { locale: tr });
+      if (!groups[monthYear]) {
+        groups[monthYear] = [];
+      }
+      groups[monthYear].push(domain);
+      return groups;
+    }, {} as Record<string, Domain[]>);
+  }, [domains]);
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -483,51 +498,62 @@ const Domains = () => {
             ) : domains?.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Henüz kayıt bulunmuyor.</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Domain/Host</TableHead>
-                    <TableHead>Tip</TableHead>
-                    <TableHead>Firma</TableHead>
-                    <TableHead>Kayıt Firması</TableHead>
-                    <TableHead>Bitiş Tarihi</TableHead>
-                    <TableHead>Kalan Gün</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {domains?.map((domain) => {
-                    const daysLeft = getDaysUntilExpiry(domain.expire_date);
-                    return (
-                      <TableRow key={domain.id}>
-                        <TableCell className="font-medium">{domain.domain_name}</TableCell>
-                        <TableCell>{getTypeBadge(domain.type)}</TableCell>
-                        <TableCell>{domain.companies?.name || '-'}</TableCell>
-                        <TableCell>{domain.registrar || '-'}</TableCell>
-                        <TableCell>{new Date(domain.expire_date).toLocaleDateString('tr-TR')}</TableCell>
-                        <TableCell>
-                          <span className={daysLeft < 30 ? 'text-destructive font-medium' : daysLeft < 60 ? 'text-orange-500' : ''}>
-                            {daysLeft} gün
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right space-x-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(domain)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteMutation.mutate(domain.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="space-y-6">
+                {Object.entries(groupedDomains).map(([monthYear, domainsInMonth]) => (
+                  <div key={monthYear}>
+                    <h3 className="text-lg font-semibold mb-3 text-primary">{monthYear}</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Domain/Host</TableHead>
+                          <TableHead>Tip</TableHead>
+                          <TableHead>Firma</TableHead>
+                          <TableHead>Kayıt Firması</TableHead>
+                          <TableHead>Bitiş Tarihi</TableHead>
+                          <TableHead>Kalan Gün</TableHead>
+                          <TableHead className="text-right">İşlemler</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {domainsInMonth.map((domain) => {
+                          const daysLeft = getDaysUntilExpiry(domain.expire_date);
+                          return (
+                            <TableRow 
+                              key={domain.id} 
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => handleEdit(domain)}
+                            >
+                              <TableCell className="font-medium">{domain.domain_name}</TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>{getTypeBadge(domain.type)}</TableCell>
+                              <TableCell>{domain.companies?.name || '-'}</TableCell>
+                              <TableCell>{domain.registrar || '-'}</TableCell>
+                              <TableCell>{new Date(domain.expire_date).toLocaleDateString('tr-TR')}</TableCell>
+                              <TableCell>
+                                <span className={daysLeft < 30 ? 'text-destructive font-medium' : daysLeft < 60 ? 'text-orange-500' : ''}>
+                                  {daysLeft} gün
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right space-x-2" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(domain)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteMutation.mutate(domain.id)}
+                                  disabled={deleteMutation.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
