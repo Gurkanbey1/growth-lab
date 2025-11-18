@@ -45,7 +45,7 @@ const Domains = () => {
   const [csvText, setCsvText] = useState('');
   const [csvDateType, setCsvDateType] = useState<'start' | 'expire'>('expire');
   const [csvType, setCsvType] = useState<'domain' | 'hosting' | 'ssl'>('domain');
-  const [csvCompanyId, setCsvCompanyId] = useState<string>('');
+  const [csvCompanyId, setCsvCompanyId] = useState<string>('none');
   const [csvRegistrar, setCsvRegistrar] = useState<string>('');
   const [formData, setFormData] = useState<Partial<Domain>>({
     company_id: undefined,
@@ -192,7 +192,7 @@ const Domains = () => {
           return {
             domain_name,
             type: csvType,
-            company_id: csvCompanyId || null,
+            company_id: csvCompanyId === 'none' ? null : csvCompanyId,
             registrar: csvRegistrar || null,
             start_date: csvDateType === 'start' ? normalizedDate : null,
             expire_date: csvDateType === 'expire' ? normalizedDate : normalizedDate,
@@ -215,7 +215,7 @@ const Domains = () => {
       setCsvOpen(false);
       setCsvText('');
       setCsvType('domain');
-      setCsvCompanyId('');
+      setCsvCompanyId('none');
       setCsvRegistrar('');
     },
     onError: (error: any) => {
@@ -321,7 +321,7 @@ const Domains = () => {
                         <SelectValue placeholder="Firma seçin" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Firma yok</SelectItem>
+                        <SelectItem value="none">Firma yok</SelectItem>
                         {companies?.map((company) => (
                           <SelectItem key={company.id} value={company.id}>
                             {company.name}
